@@ -504,6 +504,7 @@ function tagBox(valores, placeholder) {
   input.addEventListener('blur', () => { if (input.value.trim()) adicionar(); });
   desenhar();
   box.valores = () => { if (input.value.trim()) adicionar(); return vals.slice(); };
+  box.definir = (lista) => { vals.splice(0, vals.length, ...lista); desenhar(); };
   return box;
 }
 
@@ -719,6 +720,13 @@ VIEWS.inicio = function () {
   const semDono = prox ? tarefasDa(prox.id).filter((t) => !t.feita && !t.responsavel && t.prazo && diasAte(t.prazo) <= 7) : [];
 
   const grid = h('div', { class: 'grid cols2' });
+  if (prox) {
+    const pendentes = tarefasDa(prox.id).filter((t) => !t.feita).sort((a, b) => ((a.prazo || '9') < (b.prazo || '9') ? -1 : 1));
+    grid.appendChild(h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Próximas tarefas: ' + prox.nome),
+      pendentes.length > 6 ? btn('Ver todas', () => ir('festa', { id: prox.id, aba: 'checklist' }), 'ghost sm') : null),
+      pendentes.length ? h('div', { class: 'list', style: { marginTop: '10px' } }, pendentes.slice(0, 6).map((t) => linhaTarefa(t, false)))
+        : h('div', { class: 'muted small', style: { marginTop: '10px' } }, 'Checklist completo.')));
+  }
   grid.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Minhas tarefas'),
     minhas.length ? h('div', { class: 'list' }, minhas.slice(0, 8).map((t) => linhaTarefa(t, true))) : h('div', { class: 'muted small' }, 'Nada atribuído a você agora.')));
   grid.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Atrasadas da equipe'),
@@ -747,11 +755,19 @@ async function carregarSugestoes(forcar) {
 }
 
 // ---------- Festas ----------
+// rótulo "Data" que mostra o dia da semana escolhido
+function campoDataFesta(data) {
+  const dia = h('b', { style: { color: 'var(--a1)' } });
+  const atualizar = () => { dia.textContent = data.value ? DIAS_L[dt(data.value).getUTCDay()] : ''; };
+  data.addEventListener('input', atualizar); atualizar();
+  return h('label', { class: 'f' }, h('span', {}, 'Data ', dia), data);
+}
+
 function novaFesta(pre) {
   pre = pre || {};
   const nome = inp({ value: pre.nome || '', placeholder: 'Ex.: Halloween Slasher' });
   const data = inp({ type: 'date', value: pre.data || '' });
-  const horaI = inp({ type: 'time', value: pre.horaBR || '21:00' });
+  const horaI = inp({ type: 'time', value: pre.horaBR || '22:00' });
   const ptInfo = h('span', { class: 'hint' });
   const atualizarPT = () => { const p = horaPT(data.value, horaI.value); ptInfo.textContent = p ? `Portugal: ${p.txt}${p.outroDia ? ' (dia seguinte)' : ''}` : ''; };
   data.addEventListener('input', atualizarPT); horaI.addEventListener('input', atualizarPT); atualizarPT();
@@ -761,7 +777,7 @@ function novaFesta(pre) {
     titulo: 'Nova festa',
     corpo: h('div', { class: 'form' },
       campo('Nome da festa', nome, { full: true }),
-      campo('Data', data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
+      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
       campo('Tema', tema, { full: true, hint: 'O checklist padrão é criado automaticamente com prazos a partir da data.' })),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Criar festa', async () => {
       if (!nome.value.trim() || !data.value) { toast('Preencha nome e data', 'err'); return; }
@@ -864,7 +880,7 @@ function festaGeral(f) {
   return h('div', { class: 'stack' },
     h('div', { class: 'card' }, h('div', { class: 'form' },
       campo('Nome da festa', nome, { full: true }),
-      campo('Data', data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
+      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
       h('label', { class: 'f' }, 'Tema', tema, h('span', { class: 'hint' }, h('a', { href: '#', onclick: (e) => { e.preventDefault(); editarTema(null, (t) => { tema.appendChild(h('option', { value: t.id }, t.nome)); tema.value = t.id; }); } }, '+ criar tema novo'))),
       campo('Dress code', dress),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'DJs da festa'), djBox),
@@ -1078,8 +1094,7 @@ function desenharSugestoes(box, s) {
     h('div', { style: { width: '58px', textAlign: 'center' } }, h('div', { style: { fontWeight: 800, fontSize: '18px' } }, fmtDM(d.data)), h('div', { class: 'small faint' }, DIAS[dt(d.data).getUTCDay()])),
     h('div', { class: 't' }, h('div', {}, h('b', {}, d.nome), ' ', h('span', { class: 'chip' }, d.regiao), ' ', h('span', { class: 'chip' }, d.tipo)),
       h('div', { class: 's' }, emDias(d.faltam), d.ideia ? ` · ideia: ${d.ideia}` : '')),
-    btn('Tema', () => editarTema({ nome: d.ideia ? d.ideia.split('/')[0].trim() : d.nome, descricao: `${d.nome} (${fmtDM(d.data)})${d.ideia ? ' — ' + d.ideia : ''}` }, () => toast('Tema criado', 'ok')), 'sm'),
-    btn('Festa', () => novaFesta({ nome: d.nome, data: d.data }), 'sm'))))) : vazio('Nenhuma data nos próximos 90 dias', 'Cadastre datas na aba Calendário.'));
+    btn('Criar tema', () => editarTema({ nome: d.ideia ? d.ideia.split('/')[0].trim() : d.nome, descricao: `${d.nome} (${fmtDM(d.data)})${d.ideia ? ' — ' + d.ideia : ''}` }, () => toast('Tema criado', 'ok')), 'sm', 'plus'))))) : vazio('Nenhuma data nos próximos 90 dias', 'Cadastre datas na aba Calendário.'));
 
   // Trends
   box.appendChild(secao('Em alta agora (Google Trends)'));
@@ -1154,6 +1169,20 @@ function editarTema(t, depois) {
     if (paleta.length < 5) palBox.appendChild(btn('cor', () => { paleta.push('#ffffff'); desenharPaleta(); }, 'sm', 'plus'));
   }
   desenharPaleta();
+  // sugestão automática pelo nome e pela descrição; dá para clicar de novo para outra opção e editar à mão
+  const sugerir = async (b, oque) => {
+    if (!nome.value.trim() && !desc.value.trim()) { toast('Escreva o nome ou a descrição do tema primeiro', 'err'); return; }
+    const txt = b.lastChild.textContent;
+    b.disabled = true; b.lastChild.textContent = 'Pensando…';
+    try {
+      const r = await run('sugerirEstiloTema', { nome: nome.value.trim(), descricao: desc.value.trim(), paleta, tags: tags.valores() });
+      if (oque === 'cores' && r.paleta.length) { paleta = r.paleta.slice(); desenharPaleta(); }
+      if (oque === 'tags' && r.tags.length) tags.definir(r.tags);
+    } catch (e) { } finally { b.disabled = false; b.lastChild.textContent = txt; }
+  };
+  const bCores = btn('Sugerir cores', null, 'sm', 'ia'), bTags = btn('Sugerir tags', null, 'sm', 'ia');
+  bCores.addEventListener('click', () => sugerir(bCores, 'cores'));
+  bTags.addEventListener('click', () => sugerir(bTags, 'tags'));
   const refsBox = h('div', {});
   function desenharRefs(atual) {
     refsBox.innerHTML = '';
@@ -1174,8 +1203,8 @@ function editarTema(t, depois) {
     titulo: novo ? 'Novo tema' : 'Editar tema', wide: true,
     corpo: h('div', { class: 'form' },
       campo('Nome do tema', nome, { full: true }), campo('Descrição / vibe', desc, { full: true }),
-      h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Paleta (até 5 cores)'), palBox),
-      campo('Tags', tags, { hint: 'Usadas para buscar mapas (terror → horror, praia → beach…)' }),
+      h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Paleta (até 5 cores)'), palBox, h('div', { class: 'row' }, bCores)),
+      h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Tags'), tags, h('div', { class: 'row' }, bTags), h('span', { class: 'hint' }, 'Usadas para buscar mapas (terror → horror, praia → beach…)')),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Referências (moodboard no Drive)'), refsBox),
       novo ? null : editorVisualTema(t)),
     acoes: [!novo ? btn('Excluir', async () => { if (await excluir('temas', t.id, t.nome)) { m.fechar(); render(); } }, 'ghost danger') : null,
