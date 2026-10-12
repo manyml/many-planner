@@ -572,6 +572,23 @@ async function enviar(alvo, id, tipo) {
 
 function linkVRChat(worldId) { return url('vrchat.com/home/world/' + worldId); }
 
+// Abre o mapa direto no jogo (link vrchat:) numa instância pública nova, na região escolhida
+const REGIOES_VRC = [['use', 'US Leste (melhor p/ Brasil)'], ['eu', 'Europa (Portugal)'], ['us', 'US Oeste'], ['jp', 'Japão']];
+function regiaoVRC() { try { return localStorage.getItem('mp_regiao') || 'use'; } catch (e) { return 'use'; } }
+function linkJogo(worldId) {
+  const inst = String(Math.floor(10000 + Math.random() * 89999));
+  return url('launch?ref=many_planner&id=' + worldId + ':' + inst + '~region(' + regiaoVRC() + ')&attach=1', 'vrchat');
+}
+function botaoJogo(worldId, texto) {
+  return h('a', { class: 'btn sm primary', href: '#', title: 'Abre o VRChat direto neste mapa (instância pública nova, região ' + regiaoVRC() + ')',
+    onclick: (e) => { e.preventDefault(); window.location.href = linkJogo(worldId); toast('Abrindo o VRChat… (aceite o aviso do navegador)'); } }, icon('play'), texto || 'Jogo');
+}
+function seletorRegiao() {
+  const s = sel(REGIOES_VRC, regiaoVRC(), { style: { width: 'auto', padding: '6px 8px', fontSize: '13px' },
+    onchange: () => { try { localStorage.setItem('mp_regiao', s.value); } catch (e) { } toast('Região: ' + s.options[s.selectedIndex].text); } });
+  return h('label', { class: 'row small muted', style: { gap: '6px' } }, 'Abrir no jogo em', s);
+}
+
 // =====================================================================
 // Navegação
 // =====================================================================
@@ -854,7 +871,7 @@ function festaGeral(f) {
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Mapa do VRChat'),
         h('div', { class: 'row' }, h('div', { class: 'grow' }, mapaSel), btn('Sugerir mapas', buscarMapas, 'sm', 'busca')),
         mapaAtual ? h('div', { class: 'row small', style: { marginTop: '6px' } }, chipStatus(mapaAtual.status), mapaAtual.capacidade ? `cap. ${mapaAtual.capacidade}` : null,
-          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no VRChat ↗')) : null),
+          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null),
       campo('Notas internas', notas, { full: true }))),
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
@@ -1306,7 +1323,7 @@ VIEWS.dj = function () {
 VIEWS.mapas = function () {
   const aba = S.rota.aba || 'buscar';
   return h('div', {},
-    topo('Mapas', btn('Importar link', importarLink, '', 'plus')),
+    topo('Mapas', h('div', { class: 'row' }, seletorRegiao(), btn('Importar link', importarLink, '', 'plus'))),
     abas([['buscar', 'Buscar sugestões'], ['banco', 'Banco do Many', lista('mapas').length]], aba, (k) => ir('mapas', Object.assign({}, S.rota, { aba: k }))),
     aba === 'banco' ? mapasBanco() : mapasBuscar());
 };
@@ -1378,7 +1395,7 @@ function mapasBuscar() {
     return h('div', { class: 'row' },
       m.noBanco ? chipStatus(m.noBanco.status) : btn('Banco', () => adicionar(m), 'sm', 'plus'),
       festa ? btn('Usar na festa', () => adicionar(m, true), 'sm primary') : null,
-      h('a', { class: 'btn sm ghost', href: linkVRChat(m.worldId), target: '_blank' }, icon('ext')));
+      botaoJogo(m.worldId), h('a', { class: 'btn sm ghost', href: linkVRChat(m.worldId), target: '_blank', title: 'Página do mapa no site do VRChat' }, icon('ext')));
   }
 
   function desenhar(carregando) {
@@ -1391,7 +1408,7 @@ function mapasBuscar() {
       res.appendChild(secao('Aprovados do banco do Many'));
       res.appendChild(h('div', { class: 'grid' }, B.aprovados.map((m) => cardMapa(m, h('div', { class: 'row' }, chipStatus(m.status),
         festa ? btn('Usar na festa', async () => { await salvar('festas', { id: festa.id, mapaId: m.id }); toast('Mapa definido', 'ok'); }, 'sm primary') : null,
-        h('a', { class: 'btn sm ghost', href: linkVRChat(m.worldId), target: '_blank' }, icon('ext')))))));
+        botaoJogo(m.worldId), h('a', { class: 'btn sm ghost', href: linkVRChat(m.worldId), target: '_blank', title: 'Página do mapa no site do VRChat' }, icon('ext')))))));
     }
     if (carregando) { res.appendChild(h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Procurando mapas PC + Quest no vrclist…')); return; }
     if (B.resultados === null) {
@@ -1445,7 +1462,7 @@ function mapasBanco() {
       return cardMapa(m, h('div', { class: 'stack', style: { gap: '8px' } },
         h('div', { class: 'row' }, h('div', { class: 'grow' }, st), nota), quem, obs,
         u.length ? h('div', { class: 'small faint' }, 'Usado em: ' + u.map((f) => f.nome).join(', ')) : null,
-        h('div', { class: 'row' }, h('a', { class: 'btn sm', href: linkVRChat(m.worldId), target: '_blank' }, icon('ext'), 'Abrir no VRChat'),
+        h('div', { class: 'row' }, botaoJogo(m.worldId, 'Abrir no jogo'), h('a', { class: 'btn sm', href: linkVRChat(m.worldId), target: '_blank' }, icon('ext'), 'Site'),
           h('span', { class: 'grow' }), btn('', async () => { if (await excluir('mapas', m.id, m.nome)) render(); }, 'ghost sm danger', 'x'))));
     })) : vazio('Nenhum mapa aqui', 'Busque sugestões e adicione ao banco para a equipe testar.', btn('Buscar sugestões', () => ir('mapas', { aba: 'buscar' }), 'primary')));
 }
