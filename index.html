@@ -876,6 +876,10 @@ function festaGeral(f) {
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
 
+const PAGINAS_CARROSSEL = [['0', 'Automático (capa + regras no que precisar)'], ['1', '1 página (tudo junto)'], ['2', '2 páginas (capa + regras)'], ['3', '3 páginas'], ['4', '4 páginas'], ['5', '5 páginas']];
+function nomePaginas(n) { n = Number(n) || 0; return n ? (n === 1 ? '1 página' : n + ' páginas') : 'páginas automáticas'; }
+function seletorPaginas(valor) { return sel(PAGINAS_CARROSSEL, String(Number(valor) || 0)); }
+
 function festaAtividades(f) {
   const ativs = lista('atividades').filter((a) => a.festaId === f.id);
   return h('div', { class: 'stack' },
@@ -889,7 +893,7 @@ function festaAtividades(f) {
         a.regras ? h('div', { class: 'small', style: { whiteSpace: 'pre-wrap' } }, a.regras) : null,
         (a.premios || []).length ? h('div', { style: { marginTop: '10px' } }, h('div', { class: 'small muted' }, 'Prêmios'),
           h('ol', { style: { margin: '4px 0 0', paddingLeft: '20px' } }, a.premios.map((p) => h('li', {}, p)))) : null,
-        h('div', { class: 'row small muted', style: { marginTop: '10px' } }, a.prazo ? h('span', {}, `Prazo: ${fmtData(a.prazo)}`) : null, a.canal ? h('span', {}, `Canal: ${a.canal}`) : null));
+        h('div', { class: 'row small muted', style: { marginTop: '10px' } }, h('span', {}, 'Carrossel: ' + nomePaginas(a.paginas)), a.prazo ? h('span', {}, `Prazo: ${fmtData(a.prazo)}`) : null, a.canal ? h('span', {}, `Canal: ${a.canal}`) : null));
     })) : vazio('Sem atividades extras', 'Concursos, sorteios, caça ao tesouro… As inscrições continuam fora do app.'));
 }
 
@@ -898,18 +902,37 @@ function editarAtividade(f, a) {
   const tipos = lista('atividadeTipos').slice().sort((x, y) => x.nome.localeCompare(y.nome));
   const tipo = sel([['', '— tipo —']].concat(tipos.map((t) => [t.id, t.nome])).concat([['__novo', '+ criar novo tipo…']]), a.tipoId || '');
   const novoTipo = inp({ placeholder: 'Nome do novo tipo', style: { display: 'none' } });
-  tipo.addEventListener('change', () => { novoTipo.style.display = tipo.value === '__novo' ? '' : 'none'; if (tipo.value === '__novo') novoTipo.focus(); });
   const titulo = inp({ value: a.titulo || '', placeholder: 'Ex.: Concurso de avatar mais assustador' });
   const regras = area(a.regras, { placeholder: 'Como participar, critérios, onde enviar…' });
   const premios = area((a.premios || []).join('\n'), { placeholder: '1º lugar: 20€\n2º lugar: VRC+', style: { minHeight: '70px' } });
   const prazo = inp({ type: 'date', value: a.prazo || '' });
   const canal = inp({ value: a.canal || '', placeholder: '#concursos no Discord' });
+  const paginas = seletorPaginas(a.paginas);
+  const salvarPadrao = h('input', { type: 'checkbox' });
+  const linhaPadrao = h('label', { class: 'full row small', style: { color: 'var(--text)' } }, salvarPadrao, 'Guardar título, regras, prêmios e páginas como padrão deste tipo');
+  // trocar o tipo carrega os padrões dele; só sobrescreve o que está vazio ou ainda igual ao padrão do tipo anterior
+  const padraoDe = (t) => ({ titulo: (t && (t.titulo || t.nome)) || '', regras: (t && t.regras) || '', premios: ((t && t.premios) || []).join('\n'), paginas: String((t && Number(t.paginas)) || 0) });
+  let anterior = padraoDe(porId('atividadeTipos', a.tipoId));
+  tipo.addEventListener('change', () => {
+    const novo = tipo.value === '__novo';
+    novoTipo.style.display = novo ? '' : 'none';
+    salvarPadrao.checked = novo;
+    if (novo) { novoTipo.focus(); return; }
+    const pad = padraoDe(porId('atividadeTipos', tipo.value));
+    [[titulo, 'titulo'], [regras, 'regras'], [premios, 'premios'], [paginas, 'paginas']].forEach(([campoEl, k]) => {
+      const atual = campoEl.value.trim();
+      if (!atual || atual === anterior[k] || (k === 'paginas' && atual === '0')) campoEl.value = pad[k];
+    });
+    anterior = pad;
+  });
   const m = modal({
     titulo: a.id ? 'Editar atividade' : 'Nova atividade',
     corpo: h('div', { class: 'form' },
       h('label', { class: 'f full' }, 'Tipo', tipo, novoTipo),
       campo('Título', titulo, { full: true }), campo('Regras', regras, { full: true }),
-      campo('Prêmios (um por linha)', premios, { full: true }), campo('Prazo', prazo), campo('Canal', canal)),
+      campo('Prêmios (um por linha)', premios, { full: true }),
+      campo('Páginas do carrossel', paginas, { full: true, hint: 'Atividade simples cabe em 1 página; regras longas pedem mais. No automático, a capa leva os prêmios e as regras ocupam quantas páginas precisarem.' }),
+      campo('Prazo', prazo), campo('Canal', canal), linhaPadrao),
     acoes: [a.id ? btn('Excluir', async () => { if (await excluir('atividades', a.id, a.titulo || 'atividade')) { m.fechar(); render(); } }, 'ghost danger') : null,
       h('span', { class: 'grow' }), btn('Cancelar', () => m.fechar(), 'ghost'),
       btn('Salvar', async () => {
@@ -918,8 +941,10 @@ function editarAtividade(f, a) {
           if (!novoTipo.value.trim()) { toast('Dê um nome ao novo tipo', 'err'); return; }
           tipoId = (await salvar('atividadeTipos', { nome: novoTipo.value.trim() })).id;
         }
+        const listaPremios = premios.value.split('\n').map((x) => x.trim()).filter(Boolean);
         await salvar('atividades', { id: a.id, festaId: f.id, tipoId, titulo: titulo.value.trim(), regras: regras.value,
-          premios: premios.value.split('\n').map((x) => x.trim()).filter(Boolean), prazo: prazo.value, canal: canal.value.trim() });
+          premios: listaPremios, prazo: prazo.value, canal: canal.value.trim(), paginas: Number(paginas.value) || 0 });
+        if (salvarPadrao.checked && tipoId) await salvar('atividadeTipos', { id: tipoId, titulo: titulo.value.trim(), regras: regras.value, premios: listaPremios, paginas: Number(paginas.value) || 0 });
         m.fechar(); render();
       }, 'primary')]
   });
@@ -1747,7 +1772,6 @@ function ajustesIA() {
 
 // ---------- Artes ----------
 const NOMES_FUNDO = { principal: 'Fundo principal', djs: 'Fundo dos stories de DJ', atividades: 'Fundo do carrossel de atividade' };
-const NOMES_POS = { tl: 'canto sup. esq.', tr: 'canto sup. dir.', bl: 'canto inf. esq.', br: 'canto inf. dir.', ml: 'meio esq.', mr: 'meio dir.' };
 function linkDrive(id) { return url('drive.google.com/file/d/' + id + '/view'); }
 function arteDe(f) {
   const a = f.arte || {};
@@ -1785,7 +1809,8 @@ function festaArtes(f) {
     h('div', { class: 'stack', style: { gap: '6px', marginTop: '10px' } },
       req(liberaStatus, 'Festa Confirmada (status atual: ' + f.status + ')'),
       req(!!A.logo, 'Logo da festa enviado'),
-      req(!!A.fundos.principal, 'Fundo principal escolhido (sem ele uso um fundo escuro com as cores do tema)')),
+      h('div', { class: 'row small' }, h('span', { class: 'chip ' + (A.fundos.principal ? 'st-Realizada' : '') }, A.fundos.principal ? 'ok' : 'Claude'),
+        A.fundos.principal ? 'Fundo principal escolhido' : 'Sem fundo: o Claude desenha um no clima do tema (opcional)')),
     naFila.length ? h('div', { class: 'small soon', style: { marginTop: '10px' } },
       `${naFila.length} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; depois clique em "Verificar artes prontas".`) : null));
 
@@ -1844,10 +1869,11 @@ function secaoTextosArte(f, A) {
 
 function secaoFundos(f, A) {
   const tema = temaDe(f);
-  return h('div', { class: 'card' }, h('h3', {}, 'Fundos'),
+  return h('div', { class: 'card' }, h('h3', {}, 'Fundos (opcional)'),
+    h('div', { class: 'hint', style: { marginBottom: '12px' } }, 'Deixe vazio e o Claude cria o fundo no clima do tema, desenhado para a festa. Se quiser algo específico, descreva na observação do pedido (ex.: "céu estrelado com nuvens rosa"). Os fundos de DJ e de atividade, se vazios, seguem o mesmo clima com variações.'),
     h('div', { class: 'grid' }, S.artesConsts.slotsFundo.map((slot) => {
       const fu = A.fundos[slot];
-      const prev = fu ? thumbDrive(fu.fileId) : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--muted)' } }, slot === 'principal' ? 'sem fundo' : 'usa o principal');
+      const prev = fu ? thumbDrive(fu.fileId) : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--muted)', textAlign: 'center', padding: '10px' } }, 'vazio: o Claude cria');
       prev.style.aspectRatio = '9 / 16'; prev.style.backgroundSize = 'cover';
       return h('div', { class: 'stack', style: { gap: '8px' } }, h('div', { class: 'small muted' }, NOMES_FUNDO[slot]), prev,
         fu && fu.credito ? h('div', { class: 'small faint' }, 'Foto de ', h('a', { href: fu.perfil || fu.link, target: '_blank' }, fu.credito), fu.licenca ? ' (' + fu.licenca + ')' : '', ' via ', h('a', { href: fu.link, target: '_blank' }, fu.fonte || 'Unsplash')) : null,
@@ -1901,12 +1927,11 @@ function secaoDecorativos(f, A) {
     catch (e) { bGerar.disabled = false; bGerar.lastChild.textContent = 'Gerar prompts'; }
   });
   return h('div', { class: 'card' }, h('h3', {}, 'Decorativos (opcional)'),
+    h('div', { class: 'hint', style: { marginBottom: '10px' } }, 'A posição, o tamanho e o giro de cada decorativo o Claude escolhe em cada peça, variando para não ficar repetitivo.'),
     A.decorativos.length ? h('div', { class: 'files' }, A.decorativos.map((d) => {
-      const pos = sel(S.artesConsts.posicoesDeco.map((p) => [p, NOMES_POS[p]]), d.pos, { style: { padding: '5px 6px', fontSize: '12px' },
-        onchange: async () => { const r = await run('posicaoDeco', { festaId: f.id, fileId: d.fileId, pos: pos.value }); upsert('festas', r.salvo); } });
       const th = thumbDrive(d.fileId, 'checker');
       th.appendChild(h('button', { class: 'btn sm rm', onclick: () => removerDaFesta(f, d.fileId) }, icon('x')));
-      return h('div', { class: 'stack', style: { gap: '6px' } }, th, pos);
+      return th;
     })) : h('div', { class: 'small muted' }, 'Nenhum decorativo enviado.'),
     h('div', { class: 'row', style: { marginTop: '10px' } }, btn('Enviar decorativo (PNG)', () => enviarParaFesta(f, 'deco'), 'sm', 'upload')),
     h('div', { class: 'section-title', style: { marginTop: '18px' } }, 'Sugerir decorativos'),
@@ -2042,7 +2067,7 @@ function editorVisualTema(t) {
 // ---------- Equipe e ajustes ----------
 VIEWS.equipe = function () {
   const aba = S.rota.aba || 'membros';
-  const corpo = { ia: ajustesIA, membros: equipeMembros, funcoes: () => catalogo('funcoes', 'Função', 'Ex.: Recepção'), atividades: () => catalogo('atividadeTipos', 'Tipo de atividade', 'Ex.: Concurso de dança'), checklist: modeloChecklist, links: linksDados }[aba];
+  const corpo = { ia: ajustesIA, membros: equipeMembros, funcoes: () => catalogo('funcoes', 'Função', 'Ex.: Recepção'), atividades: tiposAtividade, checklist: modeloChecklist, links: linksDados }[aba];
   return h('div', {},
     topo('Equipe e ajustes'),
     abas([['membros', 'Membros', lista('equipe').length], ['ia', 'IA e roteiros'], ['funcoes', 'Funções'], ['atividades', 'Tipos de atividade'], ['checklist', 'Modelo do checklist'], ['links', 'Dados']], aba, (k) => ir('equipe', { aba: k })),
@@ -2085,6 +2110,43 @@ function catalogo(tabela, rotulo, ph) {
     })), itens.length ? null : h('div', { class: 'muted' }, 'Nada cadastrado.')),
     h('div', { class: 'row' }, h('div', { class: 'grow' }, nome), h('div', { class: 'grow' }, desc),
       btn(rotulo, async () => { if (!nome.value.trim()) return; await salvar(tabela, { nome: nome.value.trim(), descricao: desc.value.trim() }); render(); }, 'primary', 'plus')));
+}
+
+function tiposAtividade() {
+  const itens = lista('atividadeTipos').slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  return h('div', { class: 'stack' },
+    h('div', { class: 'hint' }, 'Ao escolher o tipo numa atividade da festa, o título, as regras, os prêmios e as páginas do carrossel já vêm preenchidos com o padrão daqui. Depois é só ajustar para o evento.'),
+    h('div', { class: 'row end' }, btn('Tipo de atividade', () => editarTipoAtividade(null), 'primary', 'plus')),
+    itens.length ? h('div', { class: 'grid cols2' }, itens.map((t) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, t.nome), btn('', () => editarTipoAtividade(t), 'ghost sm', 'editar')),
+      t.descricao ? h('div', { class: 'small muted', style: { marginTop: '4px' } }, t.descricao) : null,
+      t.regras ? h('div', { class: 'small', style: { whiteSpace: 'pre-wrap', marginTop: '10px' } }, t.regras) : h('div', { class: 'small faint', style: { marginTop: '10px' } }, 'Sem regras padrão.'),
+      (t.premios || []).length ? h('div', { class: 'small', style: { marginTop: '8px' } }, 'Prêmios: ' + t.premios.join(' · ')) : null,
+      h('div', { class: 'small muted', style: { marginTop: '8px' } }, 'Carrossel: ' + nomePaginas(t.paginas))))) : vazio('Nenhum tipo cadastrado', 'Ex.: Concurso de dança, Caça ao sticker.'));
+}
+
+function editarTipoAtividade(t) {
+  t = t || {};
+  const nome = inp({ value: t.nome || '', placeholder: 'Ex.: Caça ao sticker' });
+  const desc = inp({ value: t.descricao || '', placeholder: 'Para que serve (opcional)' });
+  const titulo = inp({ value: t.titulo || '', placeholder: 'Se vazio, usa o nome do tipo' });
+  const regras = area(t.regras, { placeholder: 'Regras de sempre desta atividade' });
+  const premios = area((t.premios || []).join('\n'), { placeholder: '1º lugar: R$ 100,00', style: { minHeight: '70px' } });
+  const paginas = seletorPaginas(t.paginas);
+  const m = modal({
+    titulo: t.id ? 'Editar tipo de atividade' : 'Novo tipo de atividade',
+    corpo: h('div', { class: 'form' }, campo('Nome', nome), campo('Descrição', desc),
+      campo('Título padrão', titulo, { full: true }), campo('Regras padrão', regras, { full: true }),
+      campo('Prêmios padrão (um por linha)', premios, { full: true }), campo('Páginas do carrossel', paginas, { full: true })),
+    acoes: [t.id ? btn('Excluir', async () => { if (await excluir('atividadeTipos', t.id, t.nome)) { m.fechar(); render(); } }, 'ghost danger') : null,
+      h('span', { class: 'grow' }), btn('Cancelar', () => m.fechar(), 'ghost'),
+      btn('Salvar', async () => {
+        if (!nome.value.trim()) { toast('Dê um nome ao tipo', 'err'); return; }
+        await salvar('atividadeTipos', { id: t.id, nome: nome.value.trim(), descricao: desc.value.trim(), titulo: titulo.value.trim(), regras: regras.value,
+          premios: premios.value.split('\n').map((x) => x.trim()).filter(Boolean), paginas: Number(paginas.value) || 0 });
+        m.fechar(); render();
+      }, 'primary')]
+  });
 }
 
 function modeloChecklist() {
