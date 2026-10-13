@@ -1098,6 +1098,9 @@ function desenharSugestoes(box, s) {
       h('div', { class: 's' }, emDias(d.faltam), d.ideia ? ` · ideia: ${d.ideia}` : '')),
     btn('Criar tema', () => editarTema({ nome: d.ideia ? d.ideia.split('/')[0].trim() : d.nome, descricao: `${d.nome} (${fmtDM(d.data)})${d.ideia ? ' — ' + d.ideia : ''}` }, () => toast('Tema criado', 'ok')), 'sm', 'plus'))))) : vazio('Nenhuma data nos próximos 90 dias', 'Cadastre datas na aba Calendário.'));
 
+  // Fora da caixinha: sorteio do banco de ideias ou ideias novas da IA
+  box.appendChild(secaoForaDaCaixa());
+
   // Trends
   box.appendChild(secao('Em alta agora (Google Trends)'));
   const tr = h('div', { class: 'grid cols2' });
@@ -1126,6 +1129,41 @@ function desenharSugestoes(box, s) {
       btn('Virar tema', () => editarTema({ nome: i.titulo, descricao: i.descricao, tags: i.tags }, () => toast('Tema criado', 'ok')), 'sm'),
       btn('', async () => { if (await excluir('ideias', i.id, i.titulo)) render(); }, 'ghost sm', 'x'));
   }))) : vazio('Nenhuma ideia ainda', 'Qualquer um pode sugerir e votar.'));
+}
+
+function secaoForaDaCaixa() {
+  const wrap = h('div', { class: 'stack' });
+  const grade = h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' } });
+  const dica = inp({ placeholder: 'Direção para a IA (opcional): ex. algo com animais, mais sombrio, anos 90…' });
+  const desenhar = () => {
+    grade.innerHTML = '';
+    (S.foraCaixa || []).forEach((x) => grade.appendChild(h('div', { class: 'card', style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+      h('div', { class: 'row' }, h('b', { class: 'grow', style: { fontSize: '16px' } }, x.nome), x.fonte === 'ia' ? h('span', { class: 'chip on' }, 'IA') : null),
+      h('div', { class: 'small muted', style: { flex: '1' } }, x.vibe),
+      h('div', { class: 'row' }, x.tags.map((t) => h('span', { class: 'chip' }, t))),
+      h('div', { class: 'row' },
+        btn('Criar tema', () => editarTema({ nome: x.nome, descricao: x.vibe, tags: x.tags }, () => toast('Tema criado', 'ok')), 'sm primary', 'plus'),
+        btn('Virar ideia', () => novaIdeia({ titulo: x.nome, descricao: x.vibe, tags: x.tags }), 'sm')))));
+  };
+  const carregar = async (ia, b) => {
+    const txt = b && b.lastChild.textContent;
+    if (b) { b.disabled = true; b.lastChild.textContent = ia ? 'Pensando…' : 'Sorteando…'; }
+    try {
+      const r = await (ia ? run : api)('ideiasTemas', { n: 6, ia, dica: dica.value.trim(), evitar: (S.foraCaixa || []).map((x) => x.nome) });
+      S.foraCaixa = r.ideias; desenhar();
+    } catch (e) { if (!ia) toast(e.erro || 'Não deu para sortear', 'err'); }
+    finally { if (b) { b.disabled = false; b.lastChild.textContent = txt; } }
+  };
+  const bSortear = btn('Sortear outras', null, 'sm', 'restaurar');
+  bSortear.addEventListener('click', () => carregar(false, bSortear));
+  const bIA = btn('Ideias novas da IA', null, 'sm primary', 'ia');
+  bIA.addEventListener('click', () => carregar(true, bIA));
+  wrap.appendChild(secao('Fora da caixinha', h('div', { class: 'row' }, bSortear, S.ia && S.ia.configurada ? bIA : null)));
+  if (S.ia && S.ia.configurada) wrap.appendChild(dica);
+  wrap.appendChild(grade);
+  wrap.appendChild(h('div', { class: 'hint' }, 'Temas que não dependem de data: sorteados de um banco com dezenas de ideias' + (S.ia && S.ia.configurada ? ' ou criados na hora pela IA.' : '. Com a chave do Gemini, a IA também cria ideias novas.') + ' "Virar ideia" manda para a votação da equipe.'));
+  if (S.foraCaixa) desenhar(); else carregar(false);
+  return wrap;
 }
 
 function novaIdeia(pre) {
