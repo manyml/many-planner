@@ -1090,6 +1090,21 @@ function temasSugestoes() {
 
 function desenharSugestoes(box, s) {
   box.innerHTML = '';
+  // Ideias
+  box.appendChild(secao('Ideias da equipe', btn('Nova ideia', () => novaIdeia(), 'sm', 'plus')));
+  const ideias = lista('ideias').map((i) => Object.assign({ n: (i.votos || []).length }, i)).sort((a, b) => b.n - a.n || (a.criadoEm < b.criadoEm ? 1 : -1));
+  box.appendChild(ideias.length ? h('div', { class: 'card' }, h('div', { class: 'list' }, ideias.map((i) => {
+    const votei = (i.votos || []).includes(S.me.email);
+    return h('div', { class: 'li' },
+      h('button', { class: 'btn sm ' + (votei ? 'primary' : ''), title: votei ? 'Tirar voto' : 'Votar', onclick: async () => {
+        const r = await run('votarIdeia', { id: i.id }); upsert('ideias', r.salvo); render();
+      } }, icon('coracao'), String(i.n)),
+      h('div', { class: 't' }, h('div', {}, h('b', {}, i.titulo)), h('div', { class: 's' }, [i.descricao, `por ${nomePessoa(i.criadoPor)}`].filter(Boolean).join(' · ')),
+        (i.tags || []).length ? h('div', { class: 'row', style: { marginTop: '4px' } }, i.tags.map((t) => h('span', { class: 'chip' }, t))) : null),
+      btn('Virar tema', () => editarTema({ nome: i.titulo, descricao: i.descricao, tags: i.tags }, () => toast('Tema criado', 'ok')), 'sm'),
+      btn('', async () => { if (await excluir('ideias', i.id, i.titulo)) render(); }, 'ghost sm', 'x'));
+  }))) : vazio('Nenhuma ideia ainda', 'Qualquer um pode sugerir e votar.'));
+
   // Datas
   box.appendChild(secao('Próximas datas (90 dias)', btn('Atualizar', async () => { S.sug = null; await carregarSugestoes(true); render(); }, 'ghost sm')));
   box.appendChild(s.datas.length ? h('div', { class: 'card' }, h('div', { class: 'list' }, s.datas.map((d) => h('div', { class: 'li' },
@@ -1115,20 +1130,6 @@ function desenharSugestoes(box, s) {
   box.appendChild(tr);
   box.appendChild(h('div', { class: 'hint' }, 'Clique num assunto para transformá-lo em ideia da equipe. Muita coisa não serve para festa — é garimpo.'));
 
-  // Ideias
-  box.appendChild(secao('Ideias da equipe', btn('Nova ideia', () => novaIdeia(), 'sm', 'plus')));
-  const ideias = lista('ideias').map((i) => Object.assign({ n: (i.votos || []).length }, i)).sort((a, b) => b.n - a.n || (a.criadoEm < b.criadoEm ? 1 : -1));
-  box.appendChild(ideias.length ? h('div', { class: 'card' }, h('div', { class: 'list' }, ideias.map((i) => {
-    const votei = (i.votos || []).includes(S.me.email);
-    return h('div', { class: 'li' },
-      h('button', { class: 'btn sm ' + (votei ? 'primary' : ''), title: votei ? 'Tirar voto' : 'Votar', onclick: async () => {
-        const r = await run('votarIdeia', { id: i.id }); upsert('ideias', r.salvo); render();
-      } }, icon('coracao'), String(i.n)),
-      h('div', { class: 't' }, h('div', {}, h('b', {}, i.titulo)), h('div', { class: 's' }, [i.descricao, `por ${nomePessoa(i.criadoPor)}`].filter(Boolean).join(' · ')),
-        (i.tags || []).length ? h('div', { class: 'row', style: { marginTop: '4px' } }, i.tags.map((t) => h('span', { class: 'chip' }, t))) : null),
-      btn('Virar tema', () => editarTema({ nome: i.titulo, descricao: i.descricao, tags: i.tags }, () => toast('Tema criado', 'ok')), 'sm'),
-      btn('', async () => { if (await excluir('ideias', i.id, i.titulo)) render(); }, 'ghost sm', 'x'));
-  }))) : vazio('Nenhuma ideia ainda', 'Qualquer um pode sugerir e votar.'));
 }
 
 function secaoForaDaCaixa() {
