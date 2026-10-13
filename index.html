@@ -346,6 +346,7 @@ const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   ext: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   busca: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   voltar: '<path d="m15 18-6-6 6-6"/>',
@@ -2004,7 +2005,18 @@ function secaoPedido(f, A, liberaStatus) {
 function secaoGeradas(f, pedidos) {
   if (!pedidos.length) return h('div', {});
   const artes = artesDa(f.id);
-  const wrap = h('div', { class: 'stack' }, secao('Pedidos e versões'));
+  const bBaixar = btn('Baixar artes (.zip)', null, 'sm primary', 'download');
+  bBaixar.title = 'A versão mais recente de cada peça, num arquivo só';
+  bBaixar.addEventListener('click', async () => {
+    const txt = bBaixar.lastChild.textContent;
+    bBaixar.disabled = true; bBaixar.lastChild.textContent = 'Preparando o .zip…';
+    try {
+      const r = await run('baixarArtes', { festaId: f.id });
+      window.location.href = r.url;
+      toast(`Baixando ${r.n} artes` + (r.versoes.length > 1 ? ` (versões ${r.versoes.join(', ')})` : ''), 'ok');
+    } catch (e) { } finally { bBaixar.disabled = false; bBaixar.lastChild.textContent = txt; }
+  });
+  const wrap = h('div', { class: 'stack' }, secao('Pedidos e versões', artes.length ? bBaixar : null));
   pedidos.forEach((p, i) => {
     const doPedido = artes.filter((x) => x.pedidoId === p.id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
     const corpo = h('div', { style: { display: i === 0 ? '' : 'none', marginTop: '12px' } });
