@@ -2006,18 +2006,19 @@ function secaoPedido(f, A, liberaStatus) {
 function secaoGeradas(f, pedidos) {
   if (!pedidos.length) return h('div', {});
   const artes = artesDa(f.id);
-  const bBaixar = btn('Baixar artes (.zip)', null, 'sm primary', 'download');
-  bBaixar.title = 'A versão mais recente de cada peça, num arquivo só';
+  const aprovadas = artes.filter((x) => x.status === 'Aprovada');
+  const bBaixar = btn(`Baixar aprovadas (${new Set(aprovadas.map((x) => x.nome)).size}) .zip`, null, 'sm primary', 'download');
+  bBaixar.title = 'Só as artes aprovadas: a versão aprovada mais recente de cada peça, num arquivo só';
   bBaixar.addEventListener('click', async () => {
     const txt = bBaixar.lastChild.textContent;
     bBaixar.disabled = true; bBaixar.lastChild.textContent = 'Preparando o .zip…';
     try {
       const r = await run('baixarArtes', { festaId: f.id });
       window.location.href = r.url;
-      toast(`Baixando ${r.n} artes` + (r.versoes.length > 1 ? ` (versões ${r.versoes.join(', ')})` : ''), 'ok');
+      toast(`Baixando ${r.n} artes aprovadas` + (r.versoes.length > 1 ? ` (versões ${r.versoes.join(', ')})` : ''), 'ok');
     } catch (e) { } finally { bBaixar.disabled = false; bBaixar.lastChild.textContent = txt; }
   });
-  const wrap = h('div', { class: 'stack' }, secao('Pedidos e versões', artes.length ? bBaixar : null));
+  const wrap = h('div', { class: 'stack' }, secao('Pedidos e versões', aprovadas.length ? bBaixar : null));
   pedidos.forEach((p, i) => {
     const doPedido = artes.filter((x) => x.pedidoId === p.id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
     const corpo = h('div', { style: { display: i === 0 ? '' : 'none', marginTop: '12px' } });
