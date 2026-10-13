@@ -344,6 +344,7 @@ const ICONS = {
   historico: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
   mais: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
   ext: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
@@ -2023,10 +2024,40 @@ function secaoGeradas(f, pedidos) {
     if (p.status === 'Na fila') corpo.appendChild(h('div', { class: 'small muted' }, 'Aguardando o Claude Code gerar. Peças: ' + (p.pecas || []).map((k) => (S.artesConsts.pecas.find((x) => x[0] === k) || [k, k])[1]).join(', ')));
     if ((p.avisos || []).length) corpo.appendChild(h('div', { class: 'small soon', style: { marginBottom: '10px' } }, p.avisos.map((a) => h('div', {}, a))));
     if (doPedido.length) {
+      // seleção para mudar o status de várias artes de uma vez
+      const marcadas = new Set();
+      const caixas = [];
+      const bSalvar = btn('Salvar', null, 'sm primary');
+      const todas = h('input', { type: 'checkbox' });
+      const novoStatus = sel([['Aprovada', 'Aprovada'], ['Rascunho', 'Voltar para rascunho']], 'Aprovada', { style: { width: 'auto', padding: '6px 8px', fontSize: '13px' } });
+      const atualizarBarra = () => {
+        bSalvar.disabled = !marcadas.size;
+        bSalvar.lastChild.textContent = marcadas.size ? `Salvar (${marcadas.size})` : 'Salvar';
+        todas.checked = marcadas.size === doPedido.length;
+      };
+      todas.addEventListener('change', () => {
+        caixas.forEach(([cb, id]) => { cb.checked = todas.checked; if (todas.checked) marcadas.add(id); else marcadas.delete(id); });
+        atualizarBarra();
+      });
+      const aplicar = async (ids, status) => {
+        const r = await run('avaliarArtesLote', { ids, status });
+        r.salvos.forEach((x) => upsert('artes', x));
+        toast(`${ids.length} arte(s): ${status === 'Aprovada' ? 'aprovadas' : 'de volta para rascunho'}`, 'ok'); render();
+      };
+      bSalvar.addEventListener('click', () => aplicar([...marcadas], novoStatus.value));
+      const faltaAprovar = doPedido.filter((x) => x.status !== 'Aprovada');
+      corpo.appendChild(h('div', { class: 'row', style: { marginBottom: '10px', gap: '10px' } },
+        h('label', { class: 'row small', style: { gap: '6px', color: 'var(--text)' } }, todas, 'Selecionar todas'),
+        h('span', { class: 'small muted' }, 'Marcadas →'), novoStatus, bSalvar, h('span', { class: 'grow' }),
+        faltaAprovar.length ? btn(`Aprovar todas (${faltaAprovar.length})`, () => aplicar(faltaAprovar.map((x) => x.id), 'Aprovada'), 'sm', 'check') : null));
+      atualizarBarra();
       corpo.appendChild(h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' } }, doPedido.map((x) => {
         const th = thumbDrive(x.fileId, '', x.nome);
         th.style.aspectRatio = 'auto'; th.style.height = '240px'; th.style.backgroundSize = 'contain';
-        return h('div', { class: 'stack', style: { gap: '6px' } },
+        const cb = h('input', { type: 'checkbox', title: 'Selecionar', onchange: () => { if (cb.checked) marcadas.add(x.id); else marcadas.delete(x.id); atualizarBarra(); } });
+        caixas.push([cb, x.id]);
+        return h('div', { class: 'stack', style: { gap: '6px', position: 'relative' } },
+          h('label', { style: { position: 'absolute', top: '8px', left: '8px', zIndex: 2, background: 'rgba(0,0,0,.6)', borderRadius: '8px', padding: '4px 6px', display: 'flex' } }, cb),
           h('a', { href: linkDrive(x.fileId), target: '_blank' }, th),
           h('div', { class: 'row' }, h('span', { class: 'chip st-' + (x.status === 'Aprovada' ? 'Realizada' : x.status === 'Ajuste' ? 'Cancelada' : 'Ideia') }, x.status)),
           x.comentario ? h('div', { class: 'small muted' }, '"' + x.comentario + '"') : null,
