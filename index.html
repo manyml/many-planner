@@ -65,6 +65,7 @@ img { max-width: 100%; }
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--a1) 55%, transparent); }
 .avatar.clicavel { cursor: pointer; transition: transform .2s; }
 .avatar.clicavel:hover { transform: scale(1.08); }
+.festa-logo { height: 120px; margin: 12px 0 4px; background: center / contain no-repeat; filter: drop-shadow(0 4px 14px rgba(0,0,0,.35)); }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
 .main { min-width: 0; padding: 26px 34px 90px; max-width: 1180px; }
@@ -987,12 +988,22 @@ VIEWS.festas = function () {
     fs.length ? h('div', { class: 'grid' }, fs.map(cardFesta)) : vazio('Nenhuma festa aqui', null, btn('Nova festa', () => novaFesta(), 'primary', 'plus')));
 };
 
+// logo completo da festa (inteiro, sem cortar) entre a data e o nome do card
+function logoFestaCard(f) {
+  const A = arteDe(f);
+  if (!A.logo) return null;
+  const el = h('div', { class: 'festa-logo' });
+  bgDrive(el, A.logo.fileId);
+  return el;
+}
+
 function cardFesta(f) {
   const d = dt(f.data), pr = progresso(f.id), tema = temaDe(f), n = diasAte(f.data);
   return h('div', { class: 'card click festa-card', onclick: () => ir('festa', { id: f.id }) },
     h('div', { class: 'row' },
       h('div', { class: 'date grow' }, h('b', {}, fmtDM(f.data)), h('span', { class: 'muted small' }, DIAS[d.getUTCDay()] + ' · ' + d.getUTCFullYear())),
       chipStatus(f.status)),
+    logoFestaCard(f),
     h('h4', {}, f.nome),
     h('div', { class: 'row small muted' }, parHorario(f)),
     h('div', { class: 'row', style: { margin: '10px 0' } }, tema ? h('span', { class: 'chip' }, tema.nome) : h('span', { class: 'chip' }, 'sem tema'),
@@ -1246,7 +1257,7 @@ function festaMetricas(f) {
       h('div', { class: 'section-title full' }, 'Público'),
       campo('Pico simultâneo', pico), campo('Pessoas únicas', unicos),
       h('div', { class: 'section-title full' }, 'Crescimento após a festa'),
-      campo('Novos no grupo VRChat', ng), campo('Novos no Discord', nd), campo('Novos seguidores IG', ni),
+      campo('Novos no grupo VRChat', ng), campo('Novos no Discord', nd), campo('Novos seguidores no Insta', ni),
       h('div', { class: 'section-title full' }, 'Avaliação da equipe'),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Nota geral'), nota),
       campo('O que funcionou', funcionou, { full: true }), campo('O que melhorar', melhorar, { full: true }))),
@@ -2511,14 +2522,23 @@ function equipeMembros() {
             await salvar('equipe', { email: email.value.trim(), nome: nome.value.trim() || email.value.split('@')[0] });
             toast('Acesso liberado', 'ok'); render();
           }, 'primary', 'plus')))),
-    h('div', { class: 'card' }, h('div', { class: 'list' }, membros.map((p) => {
-      const n = inp({ value: p.nome, style: { maxWidth: '220px', padding: '6px 10px' } });
-      n.addEventListener('change', async () => { await salvar('equipe', { id: p.id, nome: n.value.trim() }); toast('Nome salvo', 'ok'); });
+    h('div', { class: 'card' }, h('div', { class: 'hint', style: { marginBottom: '8px' } }, 'Cada pessoa muda o próprio nome e a própria foto (aqui ou clicando na foto da barra lateral).'),
+      h('div', { class: 'list' }, membros.map((p) => {
+      // só a própria pessoa edita nome e foto; para os outros fica só a leitura
+      const eu = p.email === S.me.email;
+      let n = h('b', {}, p.nome);
+      if (eu) {
+        n = inp({ value: p.nome, style: { maxWidth: '220px', padding: '6px 10px' } });
+        n.addEventListener('change', async () => {
+          const r = await salvar('equipe', { id: p.id, email: p.email, nome: n.value.trim() });
+          S.me.nome = r.nome || n.value.trim(); toast('Nome salvo', 'ok'); render();
+        });
+      }
       return h('div', { class: 'li' },
-        avatar(p.email, 48, { class: 'avatar clicavel', title: 'Trocar foto', onclick: () => trocarFoto(p) }),
-        h('div', { class: 't' }, n, h('div', { class: 's' }, p.email, p.email === S.me.email ? ' · você' : '')),
-        btn(p.foto ? 'Trocar foto' : 'Pôr foto', () => trocarFoto(p), 'ghost sm', 'upload'),
-        p.foto ? btn('', () => tirarFoto(p), 'ghost sm', 'x') : null,
+        eu ? avatar(p.email, 48, { class: 'avatar clicavel', title: 'Trocar minha foto', onclick: () => trocarFoto(p) }) : avatar(p.email, 48),
+        h('div', { class: 't' }, n, h('div', { class: 's' }, p.email, eu ? ' · você' : '')),
+        eu ? btn(p.foto ? 'Trocar foto' : 'Pôr foto', () => trocarFoto(p), 'ghost sm', 'upload') : null,
+        eu && p.foto ? btn('', () => tirarFoto(p), 'ghost sm', 'x') : null,
         p.email !== S.me.email ? btn('Remover', async () => {
           if (await excluir('equipe', p.id, `${p.nome} (sai de todos os aparelhos na hora)`)) render();
         }, 'ghost sm danger') : null);
