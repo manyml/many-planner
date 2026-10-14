@@ -70,6 +70,9 @@ img { max-width: 100%; }
 .vrcx-stat { background: var(--surface2, rgba(255,255,255,.04)); border-radius: 12px; padding: 10px 12px; }
 .vrcx-stat b { display: block; font-size: 24px; line-height: 1.1; }
 .vrcx-stat span { font-size: 12px; color: var(--muted); }
+.li.click { cursor: pointer; }
+.li.click:hover { background: color-mix(in srgb, var(--a1) 8%, transparent); }
+@media (max-width: 700px) { .vrcx-nums { display: none; } }
 .vrcx-graf svg { width: 100%; height: auto; max-height: 180px; display: block; }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
@@ -405,6 +408,7 @@ const ICONS = {
   mapas: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
   equipe: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   lixeira: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  metricas: '<path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/>',
   historico: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
   mais: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -700,7 +704,7 @@ function seletorRegiao() {
 // menu lateral em 3 grupos (separados por uma linha)
 const NAV_GRUPOS = [
   [['inicio', 'Início'], ['festas', 'Festas'], ['temas', 'Temas'], ['mapas', 'Mapas']],
-  [['artes', 'Artes'], ['roteiros', 'Roteiros']],
+  [['artes', 'Artes'], ['roteiros', 'Roteiros'], ['metricas', 'Métricas']],
   [['djs', 'DJs'], ['equipe', 'Equipe e ajustes'], ['lixeira', 'Lixeira'], ['historico', 'Histórico']]
 ];
 const NAV = [].concat(...NAV_GRUPOS);
@@ -1283,22 +1287,34 @@ function cardVrcx(f, m) {
     const r = await run('importarVrcx', { festaId: f.id });
     upsert('metricas', r.salvo); toast('Métricas do VRCX importadas', 'ok'); render();
   }, m.vrcx ? 'sm' : 'primary sm', 'download');
-  const ajuda = h('div', { class: 'hint' }, 'No PC com o VRCX, rode ', h('code', {}, 'node vrcx/metricas.mjs'),
-    ' (ou peça ao Claude "importar métricas do VRCX") e depois clique aqui. Só entra o que aconteceu enquanto essa pessoa estava na instância.');
-  if (!m.vrcx) return h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Público pelo VRCX'), importar), ajuda);
-  const v = m.vrcx, pessoas = v.pessoas || [];
+  if (!m.vrcx) return h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Público pelo VRCX'), importar), ajudaVrcx());
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { margin: 0 } }, 'Público pelo VRCX'),
+      h('div', { class: 'small muted' }, `importado em ${fmtQuando(m.vrcx.importadoEm)}`)), importar),
+    painelVrcx(m.vrcx));
+}
+
+function ajudaVrcx() {
+  return h('div', { class: 'hint' }, 'No PC com o VRCX, rode ', h('code', {}, 'node vrcx/metricas.mjs'),
+    ' (ou peça ao Claude "importar métricas do VRCX"). Só entra o que aconteceu enquanto essa pessoa estava na instância.');
+}
+const fmtNoite = (iso) => iso.split('-').reverse().join('/');
+function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// números, gráfico e frequentadores de uma noite do VRCX (usado na festa e na aba Métricas)
+function painelVrcx(v) {
+  const pessoas = v.pessoas || [];
   const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
+  const inst = v.instancias || [];
   const filtro = S.vrcxFiltro || 'todos';
   const vis = pessoas.filter((p) => filtro === 'todos' || (filtro === 'novos' ? p.novo : p.vezes >= 3));
   const MOSTRAR = S.vrcxTodos ? vis.length : 20;
-  return h('div', { class: 'card stack' },
-    h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { margin: 0 } }, 'Público pelo VRCX'),
-      h('div', { class: 'small muted' }, `${v.mundo} · ${horaBR(v.inicio)} às ${horaBR(v.fim)} · importado em ${fmtQuando(v.importadoEm)}`)), importar),
+  return h('div', { class: 'stack' },
+    h('div', { class: 'small muted' }, `${inst.length > 1 ? inst.map((x) => `${x.mundo} (${x.unicos})`).join(' + ') : v.mundo} · ${horaBR(v.inicio)} às ${horaBR(v.fim)}`),
     h('div', { class: 'vrcx-stats' },
-      stat(m.unicos, 'pessoas únicas'), stat(m.pico, `pico às ${horaBR(v.picoEm)}`), stat(fmtMin(m.tempoMedio || 0), 'tempo médio'),
-      stat(m.estreantes, '1ª vez numa festa'), stat(m.recorrentes, 'já tinham vindo')),
+      stat(v.unicos, 'pessoas únicas'), stat(v.pico, `pico às ${horaBR(v.picoEm)}`), stat(fmtMin(v.tempoMedioMin || 0), 'tempo médio'),
+      stat(v.novos, '1ª vez numa festa'), stat(v.recorrentes, 'já tinham vindo')),
     graficoLotacao(v.serie || []),
-    (v.outras || []).length ? h('div', { class: 'hint' }, 'Outras instâncias do grupo nessa noite: ' + v.outras.map((o) => `${o.mundo} (${o.unicos})`).join(', ') + '. Os números acima são da maior.') : null,
     h('div', { class: 'section-title' }, 'Frequentadores'),
     abas([['todos', 'Todos', pessoas.length], ['novos', '1ª vez', pessoas.filter((p) => p.novo).length], ['fieis', 'Fiéis (3+ festas)', pessoas.filter((p) => p.vezes >= 3).length]],
       filtro, (k) => { S.vrcxFiltro = k; S.vrcxTodos = false; render(); }),
@@ -1307,6 +1323,95 @@ function cardVrcx(f, m) {
         h('div', { class: 's' }, p.vezes > 1 ? `${p.vezes}ª festa do Many` : 'primeira festa do Many')),
       h('span', { class: 'small muted' }, fmtMin(p.minutos))))),
     vis.length > MOSTRAR ? h('div', { class: 'row', style: { justifyContent: 'center' } }, btn(`Ver todos (${vis.length})`, () => { S.vrcxTodos = true; render(); }, 'ghost sm')) : null);
+}
+
+// ---------- aba Métricas: todas as noites de festa do grupo Many vistas pelo VRCX ----------
+function carregarVrcx(forcar) {
+  if (S.vrcx && !forcar) return;
+  S.vrcx = { carregando: true, noites: [] };
+  if (forcar) render();
+  api('metricasVrcx', {}).then((r) => { S.vrcx = r; render(); }).catch((e) => { S.vrcx = { erro: e.erro || 'erro', noites: [] }; render(); });
+}
+// nome da noite: o que a equipe deu > festa do app nessa data > mundo
+function registroNoite(noite) { return lista('noitesMetricas').find((x) => x.noite === noite) || null; }
+function festaDaNoite(noite) { return lista('festas').find((f) => f.data === noite && f.status !== 'Cancelada') || null; }
+function nomeNoite(n) { const r = registroNoite(n.noite), f = festaDaNoite(n.noite); return (r && r.nome) || (f && f.nome) || n.mundo; }
+function renomearNoite(n) {
+  const r = registroNoite(n.noite);
+  const nome = inp({ value: nomeNoite(n), placeholder: 'Ex.: Halloween 2025' });
+  const m = modal({
+    titulo: 'Nome da festa',
+    corpo: h('div', { class: 'stack' }, campo('Nome', nome, { hint: `Noite de ${fmtNoite(n.noite)} · ${n.mundo}` })),
+    acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Salvar', async () => {
+      const dados = { noite: n.noite, nome: nome.value.trim() };
+      if (r) dados.id = r.id;
+      await salvar('noitesMetricas', dados);
+      m.fechar(); toast('Nome salvo', 'ok'); render();
+    }, 'primary')]
+  });
+  setTimeout(() => nome.select(), 50);
+}
+
+VIEWS.metricas = function () {
+  carregarVrcx();
+  const V = S.vrcx;
+  const atualizar = btn('Atualizar', () => carregarVrcx(true), '', 'download');
+  if (V.carregando) return h('div', {}, topo('Métricas', atualizar), h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Lendo os dados do VRCX…'));
+  if (V.erro) return h('div', {}, topo('Métricas', atualizar), vazio('Não deu para ler os dados', V.erro));
+  const noites = V.noites.slice().sort((a, b) => b.noite.localeCompare(a.noite));
+  if (!noites.length) return h('div', {}, topo('Métricas', atualizar), vazio('Ainda sem dados do VRCX', null, ajudaVrcx()));
+  const sel_ = S.rota.noite ? noites.find((n) => n.noite === S.rota.noite) : null;
+  if (sel_) {
+    const f = festaDaNoite(sel_.noite);
+    return h('div', {},
+      topo(nomeNoite(sel_), h('div', { class: 'row' }, btn('Renomear', () => renomearNoite(sel_), '', 'editar'),
+        f ? btn('Abrir festa', () => ir('festa', { id: f.id, aba: 'metricas' }), 'ghost') : null), () => ir('metricas')),
+      h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
+      h('div', { class: 'card' }, painelVrcx(sel_)));
+  }
+  // resumo geral
+  const todos = new Map();
+  noites.forEach((n) => (n.pessoas || []).forEach((p) => {
+    const k = p.userId || p.nome, x = todos.get(k) || { nome: p.nome, noites: 0, minutos: 0 };
+    x.noites++; x.minutos += p.minutos; todos.set(k, x);
+  }));
+  const fieis = [...todos.values()].sort((a, b) => b.noites - a.noites || b.minutos - a.minutos).slice(0, 15);
+  const media = Math.round(noites.reduce((s, n) => s + n.unicos, 0) / noites.length);
+  const maior = noites.reduce((a, b) => (b.unicos > a.unicos ? b : a));
+  const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
+  return h('div', {},
+    topo('Métricas', atualizar),
+    h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Dados do VRCX gerados em ${fmtQuando(V.geradoEm)}. Cada festa junta as instâncias do grupo Many de uma noite (das 10h às 10h do dia seguinte). Para trazer festas novas, rode `,
+      h('code', {}, 'node vrcx/metricas.mjs'), ' no PC e clique em Atualizar. Clique no lápis para dar nome a cada festa.'),
+    h('div', { class: 'stack' },
+      h('div', { class: 'card stack' },
+        h('div', { class: 'vrcx-stats' }, stat(noites.length, 'festas registradas'), stat(media, 'público médio'),
+          stat(maior.unicos, 'maior público · ' + nomeNoite(maior)), stat(todos.size, 'pessoas diferentes no total')),
+        graficoFestas(noites.slice().reverse())),
+      h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'list' }, noites.map((n) => h('div', { class: 'li click', onclick: () => ir('metricas', { noite: n.noite }) },
+        h('div', { class: 't' }, h('div', {}, h('b', {}, nomeNoite(n))),
+          h('div', { class: 's' }, `${fmtNoite(n.noite)} · ${n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo}`)),
+        h('div', { class: 'small muted vrcx-nums' }, `${n.unicos} pessoas · pico ${n.pico} · ${fmtMin(n.tempoMedioMin)} · ${n.novos} novos`),
+        btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'))))),
+      h('div', { class: 'card' }, h('h3', {}, 'Frequentadores mais fiéis'),
+        h('div', { class: 'list' }, fieis.map((p) => h('div', { class: 'li' },
+          h('div', { class: 't' }, h('div', {}, p.nome), h('div', { class: 's' }, `${p.noites} de ${noites.length} festas`)),
+          h('span', { class: 'small muted' }, fmtMin(p.minutos) + ' no total')))))));
+};
+
+// público (pessoas únicas) de cada festa, em ordem de data
+function graficoFestas(noites) {
+  if (noites.length < 2) return null;
+  const max = Math.max(...noites.map((n) => n.unicos), 1), W = 600, H = 150, bw = W / noites.length;
+  const barras = noites.map((n, i) => {
+    const alt = Math.max(2, (n.unicos / max) * (H - 34)), x = i * bw;
+    return `<rect x="${(x + 3).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(2, bw - 6).toFixed(1)}" height="${alt.toFixed(1)}" rx="3" fill="var(--a1)"><title>${esc(nomeNoite(n))} (${fmtNoite(n.noite)}): ${n.unicos} pessoas</title></rect>` +
+      `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 20 - alt).toFixed(1)}" font-size="11" text-anchor="middle" fill="var(--muted)">${n.unicos}</text>` +
+      `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="var(--faint)">${fmtNoite(n.noite).slice(0, 5)}/${n.noite.slice(2, 4)}</text>`;
+  }).join('');
+  const box = h('div', { class: 'vrcx-graf', title: 'Pessoas únicas em cada festa' });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}</svg>`;
+  return box;
 }
 
 // barras de lotação a cada 15 min, com a hora de Brasília embaixo de hora em hora
