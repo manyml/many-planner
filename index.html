@@ -1846,7 +1846,7 @@ function linkDrive(id) { return url('drive.google.com/file/d/' + id + '/view'); 
 function arteDe(f) {
   const a = f.arte || {};
   return { subtitulo: a.subtitulo || '', palavraDJ: a.palavraDJ || '', textoSorteio: a.textoSorteio || '', logo: a.logo || null,
-    fundos: a.fundos || {}, decorativos: a.decorativos || [], sugestoesDeco: a.sugestoesDeco || '', promptLogo: a.promptLogo || '', promptsDeco: Array.isArray(a.promptsDeco) ? a.promptsDeco : [] };
+    fundos: a.fundos || {}, decorativos: a.decorativos || [], sugestoesDeco: a.sugestoesDeco || '', promptLogo: a.promptLogo || '', promptsDeco: Array.isArray(a.promptsDeco) ? a.promptsDeco : [], trilha: a.trilha || null };
 }
 function pedidosDa(fid) { return lista('pedidosArte').filter((p) => p.festaId === fid).sort((a, b) => b.versao - a.versao); }
 function artesDa(fid) { return lista('artes').filter((x) => x.festaId === fid); }
@@ -1867,7 +1867,8 @@ async function removerDaFesta(f, fileId) {
 
 function festaArtes(f) {
   const A = arteDe(f), ac = S.artesConsts;
-  const pedidos = pedidosDa(f.id), naFila = pedidos.filter((p) => p.status === 'Na fila');
+  const pedidos = pedidosDa(f.id), naFila = pedidos.filter((p) => p.status === 'Na fila')
+    .concat(lista('pedidosAnimacao').filter((p) => p.festaId === f.id && p.status === 'Na fila'));
   const liberaStatus = ac.statusLibera.includes(f.status);
   const box = h('div', { class: 'stack' });
 
@@ -1890,6 +1891,7 @@ function festaArtes(f) {
   box.appendChild(secaoDecorativos(f, A));
   box.appendChild(secaoPedido(f, A, liberaStatus));
   box.appendChild(secaoGeradas(f, pedidos));
+  box.appendChild(secaoAnimacoes(f, A));
   return box;
 }
 
@@ -1898,7 +1900,11 @@ async function sincronizar(f, silencioso) {
   r.artes.forEach((x) => upsert('artes', x));
   r.pedidos.forEach((x) => upsert('pedidosArte', x));
   (r.temas || []).forEach((x) => upsert('temas', x));
-  if (!silencioso) toast(r.artes.length ? `${r.artes.length} arte(s) nova(s)` : 'Ainda não chegou nada da fila', r.artes.length ? 'ok' : '');
+  (r.animacoes || []).forEach((x) => upsert('animacoes', x));
+  (r.pedidosAnimacao || []).forEach((x) => upsert('pedidosAnimacao', x));
+  const nv = (r.animacoes || []).length;
+  const msg = [r.artes.length ? `${r.artes.length} arte(s) nova(s)` : '', nv ? `${nv} animação(ões) nova(s)` : ''].filter(Boolean).join(' e ');
+  if (!silencioso) toast(msg || 'Ainda não chegou nada da fila', msg ? 'ok' : '');
   render();
 }
 
@@ -2040,6 +2046,66 @@ function secaoPedido(f, A, liberaStatus) {
     h('div', { style: { marginTop: '12px' } }, obs),
     h('div', { class: 'row end', style: { marginTop: '12px' } },
       !pronto ? h('span', { class: 'hint grow' }, !liberaStatus ? 'Libera quando a festa estiver Confirmada.' : 'Envie o logo da festa primeiro.') : null, bPedir));
+}
+
+// ---------- Animações (motion graphics das artes aprovadas) ----------
+const PECAS_ANIMACAO = ['story', 'feed', 'djs', 'faltam7', 'faltam3', 'amanha', 'hoje'];
+function faltasAnimacao(f) {
+  const ok = artesDa(f.id).filter((x) => x.status === 'Aprovada' && PECAS_ANIMACAO.includes(x.peca));
+  const faltas = [];
+  if (!ok.some((x) => x.peca === 'story')) faltas.push('Story de anúncio');
+  if (!ok.some((x) => x.peca === 'feed')) faltas.push('Post do feed');
+  (f.djIds || []).map((id) => porId('djs', id)).filter(Boolean).forEach((d) => {
+    if (!ok.some((x) => x.peca === 'djs' && x.nome === 'Story DJ ' + d.nome)) faltas.push('Story DJ ' + d.nome);
+  });
+  return faltas;
+}
+function linkBaixarDrive(id) { return url('drive.google.com/uc?export=download&id=' + id); }
+
+function secaoAnimacoes(f, A) {
+  const faltas = faltasAnimacao(f);
+  const pedidos = lista('pedidosAnimacao').filter((p) => p.festaId === f.id).sort((a, b) => b.versao - a.versao);
+  const obs = area('', { placeholder: 'Pedido específico (opcional): ex. animação mais calma, logo girando, brilho piscando no ritmo…', style: { minHeight: '60px' } });
+  const trilhaBox = h('div', { class: 'row' },
+    A.trilha ? h('span', { class: 'chip on' }, 'Trilha: ' + A.trilha.nome) : h('span', { class: 'small muted' }, 'Sem trilha: o Claude escolhe uma música livre que combine com o tema (o crédito vai na legenda).'),
+    btn(A.trilha ? 'Trocar trilha' : 'Enviar trilha', async () => {
+      const arq = await escolherArquivo('audio/' + '*');
+      if (!arq) return;
+      if (arq.size > 20 * 1024 * 1024) { toast('Trilha maior que 20 MB', 'err'); return; }
+      toast('Enviando ' + arq.name + '…');
+      const r = await run('enviarTrilha', { festaId: f.id, nome: arq.name, mime: arq.type || 'audio/mpeg', base64: await lerBase64(arq) });
+      upsert('festas', r.salvo); toast('Trilha salva', 'ok'); render();
+    }, 'sm', 'upload'),
+    A.trilha ? btn('', async () => { const r = await run('removerTrilha', { festaId: f.id }); upsert('festas', r.salvo); render(); }, 'sm ghost danger', 'x') : null);
+  const bPedir = btn('Solicitar animações', null, 'primary', 'play');
+  bPedir.disabled = faltas.length > 0;
+  bPedir.addEventListener('click', async () => {
+    bPedir.disabled = true; bPedir.lastChild.textContent = 'Enviando para a fila…';
+    try {
+      const r = await run('pedirAnimacoes', { festaId: f.id, obs: obs.value.trim() });
+      upsert('pedidosAnimacao', r.salvo); toast(`Animações v${r.salvo.versao} na fila`, 'ok'); render();
+    } catch (e) { bPedir.disabled = false; bPedir.lastChild.textContent = 'Solicitar animações'; }
+  });
+  const card = h('div', { class: 'card' }, h('h3', {}, 'Animações'),
+    h('div', { class: 'small muted', style: { marginBottom: '10px' } }, 'Story, feed e stories dos DJs (e as contagens aprovadas) viram vídeos curtos com motion graphics e trilha, a partir das artes aprovadas.'),
+    trilhaBox, h('div', { style: { marginTop: '10px' } }, obs),
+    h('div', { class: 'row end', style: { marginTop: '12px' } },
+      faltas.length ? h('span', { class: 'hint grow' }, 'Libera quando estiverem aprovadas: ' + faltas.join(', ') + '.') : null, bPedir));
+  pedidos.forEach((p) => {
+    const vids = lista('animacoes').filter((x) => x.pedidoId === p.id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+    card.appendChild(h('div', { class: 'card', style: { background: 'var(--surface2)', marginTop: '12px' } },
+      h('div', { class: 'row' }, h('b', {}, 'Animações v' + p.versao), h('span', { class: 'chip ' + (p.status === 'Pronto' ? 'st-Realizada' : 'st-Testando') }, p.status),
+        p.trilha ? h('span', { class: 'chip' }, 'trilha: ' + p.trilha) : null, h('span', { class: 'grow' }), h('span', { class: 'small faint' }, fmtQuando(p.criadoEm))),
+      p.obs ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, '"' + p.obs + '"') : null,
+      p.status === 'Na fila' ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Aguardando o Claude Code: ' + (p.pecas || []).join(', ')) : null,
+      vids.length ? h('div', { class: 'list', style: { marginTop: '8px' } }, vids.map((v) => h('div', { class: 'li' },
+        h('div', { class: 't' }, v.nome),
+        h('a', { class: 'btn sm', href: linkDrive(v.fileId), target: '_blank' }, icon('play'), 'Ver'),
+        h('a', { class: 'btn sm primary', href: linkBaixarDrive(v.fileId) }, icon('download'), 'Baixar')))) : null,
+      (p.avisos || []).length ? h('div', { class: 'small soon', style: { marginTop: '8px' } }, p.avisos.join(' · ')) : null,
+      (p.creditos || []).length ? h('div', { class: 'small faint', style: { marginTop: '8px' } }, p.creditos.join(' · ')) : null));
+  });
+  return card;
 }
 
 function secaoGeradas(f, pedidos) {
