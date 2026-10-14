@@ -66,6 +66,11 @@ img { max-width: 100%; }
 .avatar.clicavel { cursor: pointer; transition: transform .2s; }
 .avatar.clicavel:hover { transform: scale(1.08); }
 .festa-logo { height: 120px; margin: 12px 0 4px; background: center / contain no-repeat; filter: drop-shadow(0 4px 14px rgba(0,0,0,.35)); }
+.vrcx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.vrcx-stat { background: var(--surface2, rgba(255,255,255,.04)); border-radius: 12px; padding: 10px 12px; }
+.vrcx-stat b { display: block; font-size: 24px; line-height: 1.1; }
+.vrcx-stat span { font-size: 12px; color: var(--muted); }
+.vrcx-graf svg { width: 100%; height: auto; max-height: 180px; display: block; }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
 .main { min-width: 0; padding: 26px 34px 90px; max-width: 1180px; }
@@ -1253,6 +1258,7 @@ function festaMetricas(f) {
   const v = (i) => (i.value === '' ? null : Number(i.value));
   return h('div', { class: 'stack' },
     f.data > S.hoje ? h('div', { class: 'hint' }, 'A festa ainda não aconteceu — preencha depois (tarefa D+2 do checklist).') : null,
+    cardVrcx(f, m),
     h('div', { class: 'card' }, h('div', { class: 'form' },
       h('div', { class: 'section-title full' }, 'Público'),
       campo('Pico simultâneo', pico), campo('Pessoas únicas', unicos),
@@ -1266,6 +1272,56 @@ function festaMetricas(f) {
         nota: nota.valor() || null, funcionou: funcionou.value, melhorar: melhorar.value });
       toast('Métricas salvas', 'ok');
     }, 'primary')));
+}
+
+// ---------- métricas do VRCX (geradas no PC por vrcx/metricas.mjs) ----------
+const horaBR = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+const fmtMin = (n) => (n >= 60 ? `${Math.floor(n / 60)}h${String(n % 60).padStart(2, '0')}` : `${n} min`);
+
+function cardVrcx(f, m) {
+  const importar = btn(m.vrcx ? 'Atualizar do VRCX' : 'Importar do VRCX', async () => {
+    const r = await run('importarVrcx', { festaId: f.id });
+    upsert('metricas', r.salvo); toast('Métricas do VRCX importadas', 'ok'); render();
+  }, m.vrcx ? 'sm' : 'primary sm', 'download');
+  const ajuda = h('div', { class: 'hint' }, 'No PC com o VRCX, rode ', h('code', {}, 'node vrcx/metricas.mjs'),
+    ' (ou peça ao Claude "importar métricas do VRCX") e depois clique aqui. Só entra o que aconteceu enquanto essa pessoa estava na instância.');
+  if (!m.vrcx) return h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Público pelo VRCX'), importar), ajuda);
+  const v = m.vrcx, pessoas = v.pessoas || [];
+  const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
+  const filtro = S.vrcxFiltro || 'todos';
+  const vis = pessoas.filter((p) => filtro === 'todos' || (filtro === 'novos' ? p.novo : p.vezes >= 3));
+  const MOSTRAR = S.vrcxTodos ? vis.length : 20;
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { margin: 0 } }, 'Público pelo VRCX'),
+      h('div', { class: 'small muted' }, `${v.mundo} · ${horaBR(v.inicio)} às ${horaBR(v.fim)} · importado em ${fmtQuando(v.importadoEm)}`)), importar),
+    h('div', { class: 'vrcx-stats' },
+      stat(m.unicos, 'pessoas únicas'), stat(m.pico, `pico às ${horaBR(v.picoEm)}`), stat(fmtMin(m.tempoMedio || 0), 'tempo médio'),
+      stat(m.estreantes, '1ª vez numa festa'), stat(m.recorrentes, 'já tinham vindo')),
+    graficoLotacao(v.serie || []),
+    (v.outras || []).length ? h('div', { class: 'hint' }, 'Outras instâncias do grupo nessa noite: ' + v.outras.map((o) => `${o.mundo} (${o.unicos})`).join(', ') + '. Os números acima são da maior.') : null,
+    h('div', { class: 'section-title' }, 'Frequentadores'),
+    abas([['todos', 'Todos', pessoas.length], ['novos', '1ª vez', pessoas.filter((p) => p.novo).length], ['fieis', 'Fiéis (3+ festas)', pessoas.filter((p) => p.vezes >= 3).length]],
+      filtro, (k) => { S.vrcxFiltro = k; S.vrcxTodos = false; render(); }),
+    h('div', { class: 'list' }, vis.slice(0, MOSTRAR).map((p) => h('div', { class: 'li' },
+      h('div', { class: 't' }, h('div', {}, p.nome, p.novo ? h('span', { class: 'chip st-Ideia', style: { marginLeft: '8px' } }, '1ª vez') : null),
+        h('div', { class: 's' }, p.vezes > 1 ? `${p.vezes}ª festa do Many` : 'primeira festa do Many')),
+      h('span', { class: 'small muted' }, fmtMin(p.minutos))))),
+    vis.length > MOSTRAR ? h('div', { class: 'row', style: { justifyContent: 'center' } }, btn(`Ver todos (${vis.length})`, () => { S.vrcxTodos = true; render(); }, 'ghost sm')) : null);
+}
+
+// barras de lotação a cada 15 min, com a hora de Brasília embaixo de hora em hora
+function graficoLotacao(serie) {
+  if (serie.length < 2) return null;
+  const max = Math.max(...serie.map((p) => p.n), 1), W = 600, H = 120, bw = W / serie.length;
+  const barras = serie.map((p, i) => {
+    const alt = Math.max(1, (p.n / max) * (H - 18));
+    const hora = horaBR(p.t);
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${alt.toFixed(1)}" rx="2" fill="${p.n === max ? 'var(--a2)' : 'var(--a1)'}"><title>${hora}: ${p.n} pessoas</title></rect>` +
+      (i === 0 || hora.slice(0, 2) !== horaBR(serie[i - 1].t).slice(0, 2) ? `<text x="${(i * bw).toFixed(1)}" y="${H - 3}" font-size="10" fill="var(--faint)">${hora}</text>` : '');
+  }).join('');
+  const box = h('div', { class: 'vrcx-graf', title: 'Pessoas na instância ao longo da festa' });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}</svg>`;
+  return box;
 }
 
 function festaHistorico(f) {
