@@ -59,6 +59,13 @@ img { max-width: 100%; }
 .side .sep { height: 1px; background: var(--line); margin: 10px 4px; }
 .side .me { margin-top: auto; padding: 10px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); }
 .side .me b { display: block; color: var(--text); font-weight: 600; }
+.side .me .me-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.side .me .me-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar { flex: none; display: inline-grid; place-items: center; border-radius: 50%; object-fit: cover; color: #fff; font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--a1) 55%, transparent); }
+.avatar.clicavel { cursor: pointer; transition: transform .2s; }
+.avatar.clicavel:hover { transform: scale(1.08); }
+.pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
 .main { min-width: 0; padding: 26px 34px 90px; max-width: 1180px; }
 .top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -511,6 +518,34 @@ function prazoInfo(iso) {
 }
 
 // ---------- utilitários de UI ----------
+// ---------- fotos da equipe ----------
+function pessoaDe(email) { return email ? lista('equipe').find((x) => x.email === email) || null : null; }
+function corDe(txt) { let n = 0; for (const c of String(txt || '')) n = (n * 31 + c.charCodeAt(0)) % 360; return `hsl(${n} 65% 45%)`; }
+// avatar redondo: foto da pessoa ou as iniciais numa cor fixa por e-mail
+function avatar(email, tam, extra) {
+  const p = pessoaDe(email), nome = p ? p.nome : String(email || '?').split('@')[0];
+  const ini = nome.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+  const st = { width: tam + 'px', height: tam + 'px', fontSize: Math.round(tam * 0.4) + 'px' };
+  if (p && p.foto) return h('img', Object.assign({ class: 'avatar', src: p.foto, alt: nome, title: nome, style: st }, extra || {}));
+  return h('span', Object.assign({ class: 'avatar', title: nome, style: Object.assign({ background: corDe(email) }, st) }, extra || {}), ini);
+}
+// escolhe a imagem, recorta no centro em quadrado e reduz para 160 px antes de enviar
+async function trocarFoto(p) {
+  const arq = await escolherArquivo(TIPO_IMAGEM);
+  if (!arq) return;
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(arq); });
+  const lado = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
+  c.width = c.height = 160;
+  c.getContext('2d').drawImage(img, (img.naturalWidth - lado) / 2, (img.naturalHeight - lado) / 2, lado, lado, 0, 0, 160, 160);
+  let q = 0.85, foto = c.toDataURL('image/jpeg', q);
+  while (foto.length > 40000 && q > 0.4) { q -= 0.1; foto = c.toDataURL('image/jpeg', q); }
+  const r = await run('fotoMembro', { id: p.id, foto });
+  upsert('equipe', r.salvo); toast('Foto salva', 'ok'); render();
+}
+async function tirarFoto(p) { const r = await run('fotoMembro', { id: p.id, foto: '' }); upsert('equipe', r.salvo); render(); }
+// bloquinho "foto + nome" usado nas atribuições
+function pessoaChip(email) { return email ? h('span', { class: 'pessoa-chip' }, avatar(email, 22), nomePessoa(email)) : null; }
+
 function nomePessoa(email) {
   if (!email) return '';
   const p = lista('equipe').find((x) => x.email === email);
@@ -668,7 +703,11 @@ function render() {
     NAV.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t)),
     h('div', { class: 'sep' }),
     NAV2.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t)),
-    h('div', { class: 'me' }, h('b', {}, S.me.nome), S.me.email, h('div', {}, h('a', { href: '#', onclick: (e) => { e.preventDefault(); sairDoApp(); } }, 'Sair'))));
+    h('div', { class: 'me' },
+      h('div', { class: 'me-row' },
+        avatar(S.me.email, 40, { class: 'avatar clicavel', title: 'Trocar minha foto', onclick: () => { const p = pessoaDe(S.me.email); if (p) trocarFoto(p); } }),
+        h('div', { style: { minWidth: 0 } }, h('b', {}, S.me.nome), h('div', { class: 'me-email' }, S.me.email))),
+      h('div', {}, h('a', { href: '#', onclick: (e) => { e.preventDefault(); sairDoApp(); } }, 'Sair'))));
   const mob = h('nav', { class: 'mob-bar' },
     NAV.filter(([v]) => NAV_MOB.includes(v)).map(([v, t]) => h('button', { class: navAtiva(v) ? 'on' : '', onclick: () => ir(v) }, icon(v), t)),
     h('button', { class: navMais().some(([v]) => navAtiva(v)) ? 'on' : '', onclick: menuMais }, icon('mais'), 'Mais'));
@@ -685,7 +724,7 @@ function menuMais() {
   const m = modal({
     titulo: 'Mais', corpo: h('div', { class: 'stack' },
       navMais().map(([v, t]) => h('button', { class: 'nav-btn', onclick: () => { m.fechar(); ir(v); } }, icon(v), t)),
-      h('div', { class: 'small muted', style: { padding: '8px 12px' } }, `Logado como ${S.me.nome} (${S.me.email})`),
+      h('div', { class: 'row small muted', style: { padding: '8px 12px', gap: '10px' } }, avatar(S.me.email, 32), `Logado como ${S.me.nome} (${S.me.email})`),
       h('button', { class: 'nav-btn', onclick: () => { m.fechar(); sairDoApp(); } }, icon('voltar'), 'Sair'))
   });
 }
@@ -1106,7 +1145,7 @@ function festaChecklist(f) {
         h('div', { class: 's' }, t.auto ? h('span', { class: 'auto-chip' }, icon('cadeado'), 'automático: ' + t.auto)
           : t.feita ? `feita por ${nomePessoa(t.feitaPor)} em ${fmtQuando(t.feitaEm)}` : h('span', { class: p.cls }, p.txt),
           t.offset !== null && t.offset !== undefined ? h('span', { class: 'faint' }, ` · D${t.offset >= 0 ? '+' : ''}${t.offset}`) : null)),
-      resp, btn('', () => editarTarefa(t), 'ghost sm', 'editar'));
+      t.responsavel ? avatar(t.responsavel, 28) : null, resp, btn('', () => editarTarefa(t), 'ghost sm', 'editar'));
   };
   const blocos = progressoPorCategoria(f.id).filter((c) => c.total).map((c) => {
     const estado = c.feitas === c.total ? 'completo' : c.feitas ? 'andamento' : 'vazio';
@@ -1152,6 +1191,7 @@ function festaEscala(f) {
       const pessoa = sel([['', 'escolher pessoa…']].concat(equipe.filter((p) => !pessoas.some((x) => x.pessoa === p.email)).map((p) => [p.email, p.nome])), '');
       return h('div', { class: 'card' }, h('h3', {}, fn.nome), fn.descricao ? h('div', { class: 'small muted', style: { marginTop: '-8px', marginBottom: '10px' } }, fn.descricao) : null,
         pessoas.length ? h('div', { class: 'list' }, pessoas.map((e) => h('div', { class: 'li' },
+          avatar(e.pessoa, 34),
           h('div', { class: 't' }, h('div', {}, nomePessoa(e.pessoa)), e.obs ? h('div', { class: 's' }, e.obs) : null),
           btn('', async () => { await run('excluir', { tabela: 'escala', id: e.id }); tirar('escala', e.id); render(); }, 'ghost sm', 'x')))) : h('div', { class: 'small muted' }, 'Ninguém escalado'),
         h('div', { class: 'row', style: { marginTop: '10px' } }, h('div', { class: 'grow' }, pessoa), h('div', { class: 'grow' }, obs),
@@ -2398,7 +2438,11 @@ function equipeMembros() {
     h('div', { class: 'card' }, h('div', { class: 'list' }, membros.map((p) => {
       const n = inp({ value: p.nome, style: { maxWidth: '220px', padding: '6px 10px' } });
       n.addEventListener('change', async () => { await salvar('equipe', { id: p.id, nome: n.value.trim() }); toast('Nome salvo', 'ok'); });
-      return h('div', { class: 'li' }, h('div', { class: 't' }, n, h('div', { class: 's' }, p.email, p.email === S.me.email ? ' · você' : '')),
+      return h('div', { class: 'li' },
+        avatar(p.email, 48, { class: 'avatar clicavel', title: 'Trocar foto', onclick: () => trocarFoto(p) }),
+        h('div', { class: 't' }, n, h('div', { class: 's' }, p.email, p.email === S.me.email ? ' · você' : '')),
+        btn(p.foto ? 'Trocar foto' : 'Pôr foto', () => trocarFoto(p), 'ghost sm', 'upload'),
+        p.foto ? btn('', () => tirarFoto(p), 'ghost sm', 'x') : null,
         p.email !== S.me.email ? btn('Remover', async () => {
           if (await excluir('equipe', p.id, `${p.nome} (sai de todos os aparelhos na hora)`)) render();
         }, 'ghost sm danger') : null);
