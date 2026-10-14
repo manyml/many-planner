@@ -135,6 +135,13 @@ img { max-width: 100%; }
 @keyframes cb-listras { to { background-position: 19.8px 0; } }
 @keyframes cb-brilho { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
 @keyframes cb-varre { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(120%); } }
+.cbar-grade { display: grid; column-gap: 6px; row-gap: 10px; align-items: center; }
+.cbar-grade .cbar { min-width: 0; }
+.cleg-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; padding-right: 10px; }
+.cleg-item b { color: var(--text); font-weight: 600; }
+.cleg-item svg { width: 15px; height: 15px; color: var(--cor); flex: none; }
+.cleg-item.completo { color: var(--cor); }
+.cleg-item.completo svg { animation: cb-pula 1.6s ease-in-out infinite; }
 .cleg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; }
 .cleg span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .cleg span b { color: var(--text); font-weight: 600; }
@@ -814,8 +821,14 @@ function barraChecklist(fid, opts) {
     class: 'seg ' + estado(c), title: `${c.nome}: ${c.feitas}/${c.total}`, style: { flex: c.total + ' 1 0', '--cor': c.cor } },
   h('i', { style: { width: (100 * c.feitas) / c.total + '%' } }))));
   if (!opts.legenda) return barra;
-  return h('div', {}, barra, h('div', { class: 'cleg' }, cats.map((c) => h('span', { class: estado(c), style: { '--cor': c.cor } },
-    icon(estado(c) === 'completo' ? 'check' : c.icone), c.nome, h('b', {}, `${c.feitas}/${c.total}`)))));
+  // com legenda: barra e nomes na mesma grade, cada nome embaixo do seu pedaço (pedaço pequeno cresce até caber o nome)
+  const grade = h('div', { class: 'cbar-grade' + (opts.grande ? ' grande' : ''), style: { gridTemplateColumns: cats.map((c) => `minmax(max-content, ${c.total}fr)`).join(' ') } },
+    cats.map((c) => h('div', { class: 'cbar' + (opts.grande ? ' grande' : ''), style: { gridRow: '1' } }, h('div', {
+      class: 'seg ' + estado(c), title: `${c.nome}: ${c.feitas}/${c.total}`, style: { flex: '1', '--cor': c.cor } },
+    h('i', { style: { width: (100 * c.feitas) / c.total + '%' } })))),
+    cats.map((c) => h('span', { class: 'cleg-item ' + estado(c), style: { gridRow: '2', '--cor': c.cor } },
+      icon(estado(c) === 'completo' ? 'check' : c.icone), c.nome, h('b', {}, `${c.feitas}/${c.total}`))));
+  return grade;
 }
 function festaAtiva(fid) { const f = porId('festas', fid); return f && !['Realizada', 'Cancelada'].includes(f.status) ? f : null; }
 function temaDe(f) { return f && f.temaId ? porId('temas', f.temaId) : null; }
