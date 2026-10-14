@@ -1663,13 +1663,33 @@ function cardMapa(m, acoes) {
       h('div', { class: 'acts' }, acoes)));
 }
 
+const MOTORES_MAPA = [['vrclist', 'vrclist'], ['vrcmap', 'vrcmap'], ['vrcwws', 'VRC World Search']];
+function motorMapaSalvo() { try { return localStorage.getItem('many_motor_mapa') || 'vrclist'; } catch (e) { return 'vrclist'; } }
+
 function mapasBuscar() {
   const r = S.rota;
   const festa = r.festaId ? porId('festas', r.festaId) : null;
   if (!S.busca || S.busca.chave !== JSON.stringify([r.texto, r.tags, r.festaId])) {
-    S.busca = { chave: JSON.stringify([r.texto, r.tags, r.festaId]), texto: r.texto || '', tags: r.tags || [], cap: 30, balada: true, pagina: 1, resultados: null, aprovados: [], erros: [] };
+    S.busca = { chave: JSON.stringify([r.texto, r.tags, r.festaId]), texto: r.texto || '', tags: r.tags || [], cap: 30, balada: true, pagina: 1, resultados: null, aprovados: [], erros: [],
+      motor: S.busca ? S.busca.motor : motorMapaSalvo() };
   }
   const B = S.busca;
+  const nomeMotor = (MOTORES_MAPA.find((x) => x[0] === B.motor) || MOTORES_MAPA[0])[1];
+  const motor = sel(MOTORES_MAPA, B.motor);
+  motor.addEventListener('change', () => {
+    B.motor = motor.value;
+    try { localStorage.setItem('many_motor_mapa', B.motor); } catch (e) { }
+    if (B.resultados !== null) buscar(); else render();
+  });
+  // escolher a festa já puxa o nome e as tags do tema dela
+  const festasAbertas = festasOrdenadas().filter((f) => f.data >= S.hoje && !['Cancelada', 'Realizada'].includes(f.status));
+  if (festa && !festasAbertas.includes(festa)) festasAbertas.unshift(festa);
+  const festaSel = sel([['', '— nenhuma —']].concat(festasAbertas.map((f) => [f.id, `${f.nome} (${fmtDM(f.data)})`])), festa ? festa.id : '');
+  festaSel.addEventListener('change', () => {
+    const f = porId('festas', festaSel.value), t = f ? temaDe(f) : null;
+    if (!f) { ir('mapas', { aba: 'buscar' }); return; }
+    ir('mapas', { aba: 'buscar', festaId: f.id, texto: t ? t.nome : '', tags: t ? t.tags || [] : [] });
+  });
   const texto = inp({ value: B.texto, placeholder: 'Ex.: halloween, praia, neon…' });
   const tags = tagBox(B.tags, 'tags (terror, praia…)');
   const cap = inp({ type: 'number', min: 0, value: B.cap, style: { width: '90px' } });
@@ -1678,10 +1698,10 @@ function mapasBuscar() {
 
   async function buscar(mais) {
     B.texto = texto.value.trim(); B.tags = tags.valores(); B.cap = Number(cap.value) || 0; B.balada = balada.checked;
-    B.pagina = mais ? B.pagina + 1 : 1;
+    B.pagina = mais ? B.pagina + 1 : 1; B.motor = motor.value;
     if (!mais) { B.resultados = null; desenhar(true); }
     try {
-      const out = await api('buscarMapas', { texto: B.texto, tags: B.tags, capacidadeMin: B.cap, balada: B.balada, pagina: B.pagina });
+      const out = await api('buscarMapas', { motor: B.motor, texto: B.texto, tags: B.tags, capacidadeMin: B.cap, balada: B.balada, pagina: B.pagina });
       B.resultados = mais ? (B.resultados || []).concat(out.resultados.filter((x) => !(B.resultados || []).some((y) => y.worldId === x.worldId))) : out.resultados;
       B.aprovados = out.aprovados; B.erros = out.erros;
     } catch (e) { B.erros = [e.erro || 'erro']; B.resultados = B.resultados || []; }
@@ -1709,7 +1729,7 @@ function mapasBuscar() {
   function desenhar(carregando) {
     res.innerHTML = '';
     if (B.erros.length) {
-      res.appendChild(h('div', { class: 'card', style: { borderColor: 'var(--warn)' } }, h('b', {}, 'O vrclist não respondeu agora. '),
+      res.appendChild(h('div', { class: 'card', style: { borderColor: 'var(--warn)' } }, h('b', {}, `O ${nomeMotor} não respondeu agora. `),
         'Tente de novo em instantes, importe por link ou procure direto nos sites abaixo.'));
     }
     if (B.aprovados.length) {
@@ -1718,13 +1738,13 @@ function mapasBuscar() {
         festa ? btn('Usar na festa', async () => { await salvar('festas', { id: festa.id, mapaId: m.id }); toast('Mapa definido', 'ok'); }, 'sm primary') : null,
         botaoJogo(m.worldId), h('a', { class: 'btn sm ghost', href: linkVRChat(m.worldId), target: '_blank', title: 'Página do mapa no site do VRChat' }, icon('ext')))))));
     }
-    if (carregando) { res.appendChild(h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Procurando mapas PC + Quest no vrclist…')); return; }
+    if (carregando) { res.appendChild(h('div', { class: 'loading' }, h('span', { class: 'spin' }), `Procurando mapas PC + Quest no ${nomeMotor}…`)); return; }
     if (B.resultados === null) {
       res.appendChild(vazio('Busque mapas para a festa', 'Digite o tema e/ou tags. Só aparecem mapas que rodam em PC e Quest; conteúdo +18 fica de fora.'));
     } else if (!B.resultados.length && !B.erros.length) {
       res.appendChild(vazio('Nada encontrado', 'Tente outras palavras (em inglês costuma render mais: horror, beach, neon…).'));
     } else if (B.resultados.length) {
-      res.appendChild(secao(`Sugestões do vrclist (${B.resultados.length})`));
+      res.appendChild(secao(`Sugestões do ${nomeMotor} (${B.resultados.length})`));
       res.appendChild(h('div', { class: 'grid' }, B.resultados.map((m) => cardMapa(m, acoesMapa(m)))));
       res.appendChild(h('div', { class: 'row', style: { justifyContent: 'center' } }, btn('Mais resultados', () => buscar(true))));
     }
@@ -1742,6 +1762,7 @@ function mapasBuscar() {
     festa ? h('div', { class: 'card', style: { borderColor: 'var(--a1)' } }, 'Buscando mapa para ', h('b', {}, festa.nome), '. ',
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); ir('festa', { id: festa.id }); } }, 'voltar para a festa')) : null,
     h('div', { class: 'card' }, h('div', { class: 'form' },
+      campo('Festa', festaSel, { hint: 'Puxa o nome e as tags do tema da festa.' }), campo('Buscar no', motor),
       campo('Tema / palavras', texto), campo('Tags', tags),
       h('label', { class: 'f' }, 'Capacidade mínima', cap),
       h('label', { class: 'f' }, 'Filtros', h('span', { class: 'row', style: { color: 'var(--text)' } }, balada, 'Incluir mapas de balada (club/DJ)')),
