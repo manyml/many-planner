@@ -73,6 +73,14 @@ img { max-width: 100%; }
 .li.click { cursor: pointer; }
 .li.click:hover { background: color-mix(in srgb, var(--a1) 8%, transparent); }
 @media (max-width: 700px) { .vrcx-nums { display: none; } }
+.vrcx-graf { position: relative; }
+.vrcx-graf rect { transition: opacity .15s, filter .15s; }
+.vrcx-graf:hover rect { opacity: .55; }
+.vrcx-graf:hover rect.on { opacity: 1; filter: brightness(1.25) drop-shadow(0 0 6px var(--a1)); }
+.graf-dica { display: none; position: absolute; pointer-events: none; z-index: 5; white-space: nowrap; padding: 7px 10px; border-radius: 10px;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--a1) 45%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px; }
+.graf-dica b { display: block; font-size: 13px; color: var(--text); }
+.graf-dica span { color: var(--muted); }
 .vrcx-graf svg { width: 100%; height: auto; max-height: 180px; display: block; }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
@@ -1336,6 +1344,22 @@ function carregarVrcx(forcar) {
 function registroNoite(noite) { return lista('noitesMetricas').find((x) => x.noite === noite) || null; }
 function festaDaNoite(noite) { return lista('festas').find((f) => f.data === noite && f.status !== 'Cancelada') || null; }
 function nomeNoite(n) { const r = registroNoite(n.noite), f = festaDaNoite(n.noite); return (r && r.nome) || (f && f.nome) || n.mundo; }
+// apagar = esconder a noite da lista (precisa confirmar); dá para restaurar no fim da lista
+async function apagarNoite(n) {
+  if (!(await confirmar(`Apagar o registro "${nomeNoite(n)}" (${fmtNoite(n.noite)})? Ele some da lista e dos totais. Dá para restaurar no fim da lista de festas.`, 'Apagar'))) return false;
+  const r = registroNoite(n.noite);
+  const dados = { noite: n.noite, apagada: true };
+  if (r) dados.id = r.id;
+  await salvar('noitesMetricas', dados);
+  toast('Registro apagado');
+  return true;
+}
+async function restaurarNoite(n) {
+  const r = registroNoite(n.noite);
+  await salvar('noitesMetricas', { id: r.id, noite: n.noite, apagada: false });
+  toast('Registro restaurado', 'ok'); render();
+}
+
 function renomearNoite(n) {
   const r = registroNoite(n.noite);
   const nome = inp({ value: nomeNoite(n), placeholder: 'Ex.: Halloween 2025' });
@@ -1358,13 +1382,16 @@ VIEWS.metricas = function () {
   const atualizar = btn('Atualizar', () => carregarVrcx(true), '', 'download');
   if (V.carregando) return h('div', {}, topo('Métricas', atualizar), h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Lendo os dados do VRCX…'));
   if (V.erro) return h('div', {}, topo('Métricas', atualizar), vazio('Não deu para ler os dados', V.erro));
-  const noites = V.noites.slice().sort((a, b) => b.noite.localeCompare(a.noite));
-  if (!noites.length) return h('div', {}, topo('Métricas', atualizar), vazio('Ainda sem dados do VRCX', null, ajudaVrcx()));
+  const todasNoites = V.noites.slice().sort((a, b) => b.noite.localeCompare(a.noite));
+  const apagadas = todasNoites.filter((n) => (registroNoite(n.noite) || {}).apagada);
+  const noites = todasNoites.filter((n) => !apagadas.includes(n));
+  if (!noites.length && !apagadas.length) return h('div', {}, topo('Métricas', atualizar), vazio('Ainda sem dados do VRCX', null, ajudaVrcx()));
   const sel_ = S.rota.noite ? noites.find((n) => n.noite === S.rota.noite) : null;
   if (sel_) {
     const f = festaDaNoite(sel_.noite);
     return h('div', {},
       topo(nomeNoite(sel_), h('div', { class: 'row' }, btn('Renomear', () => renomearNoite(sel_), '', 'editar'),
+        btn('Apagar', async () => { if (await apagarNoite(sel_)) ir('metricas'); }, 'ghost danger', 'lixeira'),
         f ? btn('Abrir festa', () => ir('festa', { id: f.id, aba: 'metricas' }), 'ghost') : null), () => ir('metricas')),
       h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
       h('div', { class: 'card' }, painelVrcx(sel_)));
@@ -1376,8 +1403,8 @@ VIEWS.metricas = function () {
     x.noites++; x.minutos += p.minutos; todos.set(k, x);
   }));
   const fieis = [...todos.values()].sort((a, b) => b.noites - a.noites || b.minutos - a.minutos).slice(0, 15);
-  const media = Math.round(noites.reduce((s, n) => s + n.unicos, 0) / noites.length);
-  const maior = noites.reduce((a, b) => (b.unicos > a.unicos ? b : a));
+  const media = noites.length ? Math.round(noites.reduce((s, n) => s + n.unicos, 0) / noites.length) : 0;
+  const maior = noites.length ? noites.reduce((a, b) => (b.unicos > a.unicos ? b : a)) : null;
   const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
   return h('div', {},
     topo('Métricas', atualizar),
@@ -1386,13 +1413,20 @@ VIEWS.metricas = function () {
     h('div', { class: 'stack' },
       h('div', { class: 'card stack' },
         h('div', { class: 'vrcx-stats' }, stat(noites.length, 'festas registradas'), stat(media, 'público médio'),
-          stat(maior.unicos, 'maior público · ' + nomeNoite(maior)), stat(todos.size, 'pessoas diferentes no total')),
+          maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total')),
         graficoFestas(noites.slice().reverse())),
       h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'list' }, noites.map((n) => h('div', { class: 'li click', onclick: () => ir('metricas', { noite: n.noite }) },
         h('div', { class: 't' }, h('div', {}, h('b', {}, nomeNoite(n))),
           h('div', { class: 's' }, `${fmtNoite(n.noite)} · ${n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo}`)),
         h('div', { class: 'small muted vrcx-nums' }, `${n.unicos} pessoas · pico ${n.pico} · ${fmtMin(n.tempoMedioMin)} · ${n.novos} novos`),
-        btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'))))),
+        btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
+        btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')))),
+        apagadas.length ? h('div', { class: 'small muted', style: { marginTop: '10px' } },
+          h('a', { href: '#', onclick: (e) => { e.preventDefault(); S.verApagadas = !S.verApagadas; render(); } },
+            `${apagadas.length} registro(s) apagado(s) · ${S.verApagadas ? 'esconder' : 'mostrar'}`)) : null,
+        apagadas.length && S.verApagadas ? h('div', { class: 'list' }, apagadas.map((n) => h('div', { class: 'li', style: { opacity: 0.6 } },
+          h('div', { class: 't' }, h('div', {}, nomeNoite(n)), h('div', { class: 's' }, `${fmtNoite(n.noite)} · ${n.unicos} pessoas`)),
+          btn('Restaurar', () => restaurarNoite(n), 'ghost sm')))) : null),
       h('div', { class: 'card' }, h('h3', {}, 'Frequentadores mais fiéis'),
         h('div', { class: 'list' }, fieis.map((p) => h('div', { class: 'li' },
           h('div', { class: 't' }, h('div', {}, p.nome), h('div', { class: 's' }, `${p.noites} de ${noites.length} festas`)),
@@ -1405,12 +1439,14 @@ function graficoFestas(noites) {
   const max = Math.max(...noites.map((n) => n.unicos), 1), W = 600, H = 150, bw = W / noites.length;
   const barras = noites.map((n, i) => {
     const alt = Math.max(2, (n.unicos / max) * (H - 34)), x = i * bw;
-    return `<rect x="${(x + 3).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(2, bw - 6).toFixed(1)}" height="${alt.toFixed(1)}" rx="3" fill="var(--a1)"><title>${esc(nomeNoite(n))} (${fmtNoite(n.noite)}): ${n.unicos} pessoas</title></rect>` +
+    return `<rect x="${(x + 3).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(2, bw - 6).toFixed(1)}" height="${alt.toFixed(1)}" rx="3" fill="var(--a1)" data-i="${i}"></rect>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 20 - alt).toFixed(1)}" font-size="11" text-anchor="middle" fill="var(--muted)">${n.unicos}</text>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="var(--faint)">${fmtNoite(n.noite).slice(0, 5)}/${n.noite.slice(2, 4)}</text>`;
   }).join('');
-  const box = h('div', { class: 'vrcx-graf', title: 'Pessoas únicas em cada festa' });
+  const box = h('div', { class: 'vrcx-graf' });
   box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}</svg>`;
+  dicaGrafico(box, noites.length, (i) => [nomeNoite(noites[i]), `${fmtNoite(noites[i].noite)} · ${noites[i].unicos} pessoas · pico ${noites[i].pico}`],
+    (i) => ir('metricas', { noite: noites[i].noite }));
   return box;
 }
 
@@ -1421,12 +1457,38 @@ function graficoLotacao(serie) {
   const barras = serie.map((p, i) => {
     const alt = Math.max(1, (p.n / max) * (H - 18));
     const hora = horaBR(p.t);
-    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${alt.toFixed(1)}" rx="2" fill="${p.n === max ? 'var(--a2)' : 'var(--a1)'}"><title>${hora}: ${p.n} pessoas</title></rect>` +
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${alt.toFixed(1)}" rx="2" fill="${p.n === max ? 'var(--a2)' : 'var(--a1)'}" data-i="${i}"></rect>` +
       (i === 0 || hora.slice(0, 2) !== horaBR(serie[i - 1].t).slice(0, 2) ? `<text x="${(i * bw).toFixed(1)}" y="${H - 3}" font-size="10" fill="var(--faint)">${hora}</text>` : '');
   }).join('');
-  const box = h('div', { class: 'vrcx-graf', title: 'Pessoas na instância ao longo da festa' });
+  const box = h('div', { class: 'vrcx-graf' });
   box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}</svg>`;
+  dicaGrafico(box, serie.length, (i) => [horaBR(serie[i].t), `${serie[i].n} pessoas na festa`]);
   return box;
+}
+
+// dica que segue o mouse num gráfico de barras: acha a coluna pela posição e destaca a barra
+function dicaGrafico(box, total, textos, aoClicar) {
+  const dica = h('div', { class: 'graf-dica' });
+  box.appendChild(dica);
+  let atual = -1;
+  const indice = (e) => { const r = box.getBoundingClientRect(); return Math.min(total - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * total))); };
+  box.addEventListener('mousemove', (e) => {
+    const i = indice(e), r = box.getBoundingClientRect();
+    if (i !== atual) {
+      box.querySelectorAll('rect.on').forEach((x) => x.classList.remove('on'));
+      const barra = box.querySelector(`rect[data-i="${i}"]`);
+      if (barra) barra.classList.add('on');
+      const [titulo, sub] = textos(i);
+      dica.replaceChildren(h('b', {}, titulo), h('span', {}, sub));
+      atual = i;
+    }
+    dica.style.display = 'block';
+    const x = e.clientX - r.left, larg = dica.offsetWidth;
+    dica.style.left = Math.min(Math.max(0, x - larg / 2), r.width - larg) + 'px';
+    dica.style.top = Math.max(0, e.clientY - r.top - dica.offsetHeight - 12) + 'px';
+  });
+  box.addEventListener('mouseleave', () => { dica.style.display = 'none'; box.querySelectorAll('rect.on').forEach((x) => x.classList.remove('on')); atual = -1; });
+  if (aoClicar) { box.style.cursor = 'pointer'; box.addEventListener('click', (e) => aoClicar(indice(e))); }
 }
 
 function festaHistorico(f) {
