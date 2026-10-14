@@ -115,6 +115,42 @@ img { max-width: 100%; }
 .empty b { display: block; color: var(--text); margin-bottom: 4px; font-size: 16px; }
 .bar { height: 6px; background: var(--surface2); border-radius: 9px; overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--grad); border-radius: 9px; }
+
+.cbar { display: flex; gap: 4px; height: 8px; }
+.cbar.grande { height: 14px; gap: 6px; }
+.cbar .seg { position: relative; min-width: 14px; border-radius: 9px; background: color-mix(in srgb, var(--cor) 16%, var(--surface2)); overflow: hidden; }
+.cbar .seg > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 9px; background-color: var(--cor); transition: width .8s cubic-bezier(.22,1,.36,1); }
+.cbar .seg.vazio { animation: cb-respira 2.6s ease-in-out infinite; }
+.cbar .seg.andamento > i { background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.28) 0 7px, transparent 7px 14px); background-size: 19.8px 19.8px; animation: cb-listras .9s linear infinite; }
+.cbar .seg.completo > i { box-shadow: 0 0 14px var(--cor); animation: cb-brilho 2.2s ease-in-out infinite; }
+.cbar .seg.completo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.65) 50%, transparent 70%); transform: translateX(-120%); animation: cb-varre 2.8s ease-in-out infinite; }
+@keyframes cb-respira { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@keyframes cb-listras { to { background-position: 19.8px 0; } }
+@keyframes cb-brilho { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+@keyframes cb-varre { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(120%); } }
+.cleg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; }
+.cleg span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.cleg span b { color: var(--text); font-weight: 600; }
+.cleg svg { width: 15px; height: 15px; color: var(--cor); }
+.cleg span.completo { color: var(--cor); }
+.cleg span.completo svg { animation: cb-pula 1.6s ease-in-out infinite; }
+.cat { border-top: 3px solid var(--cor); }
+.cat-head { display: flex; align-items: center; gap: 12px; }
+.cat-ico { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; color: var(--cor); background: color-mix(in srgb, var(--cor) 18%, transparent); }
+.cat-ico svg { width: 20px; height: 20px; }
+.cat.andamento .cat-ico { animation: cb-gira-leve 3s ease-in-out infinite; }
+.cat.completo .cat-ico { background: var(--cor); color: #08121a; box-shadow: 0 0 18px color-mix(in srgb, var(--cor) 60%, transparent); animation: cb-pula 1.6s ease-in-out infinite; }
+.cat.vazio .cat-ico { opacity: .75; }
+.cat-num { font-weight: 800; font-size: 20px; color: var(--cor); }
+@keyframes cb-pula { 0%, 100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-3px) scale(1.08); } }
+@keyframes cb-gira-leve { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+.tarefa .t-ico { flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--cor, var(--a1)); background: color-mix(in srgb, var(--cor, #17d8c8) 12%, transparent); }
+.tarefa .t-ico svg { width: 16px; height: 16px; }
+.tarefa.feita .t-ico { opacity: .55; }
+.tarefa.feita input[type=checkbox] { animation: cb-marca .45s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cb-marca { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+.auto-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--cor, var(--a1)); }
+.auto-chip svg { width: 12px; height: 12px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
@@ -316,7 +352,7 @@ function h(tag, attrs, ...kids) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === null || v === undefined || v === false) continue;
     if (k === 'class') el.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') Object.keys(v).forEach((p) => { if (p.startsWith('--')) el.style.setProperty(p, v[p]); else el.style[p] = v[p]; });
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'value') el.value = v;
     else if (k === 'checked' || k === 'disabled' || k === 'selected') el[k] = !!v;
@@ -346,6 +382,14 @@ const ICONS = {
   mais: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  megafone: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/>',
+  raio: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  prancheta: '<rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
+  estrela: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  imagem: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 9"/>',
+  celular: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  grafico: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  cadeado: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   ext: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
@@ -663,14 +707,83 @@ function abas(lista_, atual, onTroca) {
 
 function festasOrdenadas() { return lista('festas').slice().sort((a, b) => (a.data < b.data ? -1 : 1)); }
 function proximaFesta() { return festasOrdenadas().find((f) => f.data >= S.hoje && f.status !== 'Cancelada') || null; }
-function tarefasDa(fid) { return lista('tarefas').filter((t) => t.festaId === fid).sort((a, b) => ((a.prazo || '9') < (b.prazo || '9') ? -1 : 1)); }
+// ---------- Checklist: categorias, ícones e marcação automática ----------
+const CATEGORIAS_TAREFA = [
+  { k: 'planejamento', nome: 'Planejamento', icone: 'prancheta', cor: '#17d8c8' },
+  { k: 'divulgacao', nome: 'Divulgação', icone: 'megafone', cor: '#ff4fb8' },
+  { k: 'acao', nome: 'Ação', icone: 'raio', cor: '#ffc94d' }
+];
+function categoriaDe(t) {
+  if (CATEGORIAS_TAREFA.some((c) => c.k === t.categoria)) return t.categoria;
+  const x = String(t.titulo || '').toLowerCase();
+  if (/reuni|m[eé]tric|avalia/.test(x)) return 'acao';
+  if (/^artes?\b|montar artes|publicar|an[uú]ncio|criar evento|lembrete|^story|contagem|divulg/.test(x)) return 'divulgacao';
+  return 'planejamento';
+}
+function corCategoria(k) { return (CATEGORIAS_TAREFA.find((c) => c.k === k) || CATEGORIAS_TAREFA[0]).cor; }
+function iconeTarefa(t) {
+  const x = String(t.titulo || '').toLowerCase();
+  const regras = [[/reuni/, 'equipe'], [/m[eé]tric|avalia/, 'grafico'], [/tema/, 'temas'], [/mapa/, 'mapas'], [/atividade/, 'estrela'],
+    [/escala/, 'equipe'], [/^artes?\b|montar artes/, 'imagem'], [/publicar|an[uú]ncio/, 'megafone'], [/evento/, 'festas'],
+    [/story|lembrete|contagem/, 'celular'], [/dj/, 'djs']];
+  const r = regras.find(([re]) => re.test(x));
+  return r ? r[1] : 'check';
+}
+// motivo para a tarefa contar como feita sozinha ('' = não)
+function autoMotivo(t, f) {
+  if (!f) return '';
+  const x = String(t.titulo || '').toLowerCase();
+  const metricas = /m[eé]tric/.test(x);
+  if (f.data && f.data < S.hoje && !metricas) return 'a data da festa já passou';
+  if (/tema/.test(x) && ['Confirmada', 'Divulgada', 'Realizada'].includes(f.status)) return 'festa confirmada';
+  if (/(buscar|testar|escolher).*mapa/.test(x) && f.mapaId) return 'mapa escolhido';
+  if (/atividade/.test(x) && lista('atividades').some((a) => a.festaId === f.id)) return 'atividade cadastrada';
+  if (/escala/.test(x)) {
+    const funcoes = lista('funcoes'), esc = lista('escala').filter((e) => e.festaId === f.id && e.pessoa);
+    if (funcoes.length && funcoes.every((fn) => esc.some((e) => e.funcaoId === fn.id))) return 'todas as funções preenchidas';
+  }
+  if (/^artes?\b|montar artes/.test(x)) {
+    const nomes = [...new Set(artesDa(f.id).map((a) => a.nome))];
+    if (nomes.length && nomes.every((n) => artesDa(f.id).some((a) => a.nome === n && a.status === 'Aprovada'))) return 'artes aprovadas';
+  }
+  return '';
+}
+function comAuto(t, f) {
+  if (t.feita) return t;
+  const m = autoMotivo(t, f);
+  return m ? Object.assign({}, t, { feita: true, auto: m }) : t;
+}
+function tarefasDa(fid) {
+  const f = porId('festas', fid);
+  return lista('tarefas').filter((t) => t.festaId === fid).map((t) => comAuto(t, f)).sort((a, b) => ((a.prazo || '9') < (b.prazo || '9') ? -1 : 1));
+}
+function tarefasTodas() { return lista('tarefas').map((t) => comAuto(t, porId('festas', t.festaId))); }
 function progresso(fid) { const t = tarefasDa(fid); return { feitas: t.filter((x) => x.feita).length, total: t.length }; }
+function progressoPorCategoria(fid) {
+  const ts = tarefasDa(fid);
+  return CATEGORIAS_TAREFA.map((c) => {
+    const l = ts.filter((t) => categoriaDe(t) === c.k);
+    return Object.assign({ tarefas: l, feitas: l.filter((t) => t.feita).length, total: l.length }, c);
+  });
+}
+// barra dividida nas 3 categorias; cada pedaço anima conforme o estado (parado, andando, completo)
+function barraChecklist(fid, opts) {
+  opts = opts || {};
+  const cats = progressoPorCategoria(fid).filter((c) => c.total);
+  const estado = (c) => (c.feitas === c.total ? 'completo' : c.feitas ? 'andamento' : 'vazio');
+  const barra = h('div', { class: 'cbar' + (opts.grande ? ' grande' : '') }, cats.map((c) => h('div', {
+    class: 'seg ' + estado(c), title: `${c.nome}: ${c.feitas}/${c.total}`, style: { flex: c.total + ' 1 0', '--cor': c.cor } },
+  h('i', { style: { width: (100 * c.feitas) / c.total + '%' } }))));
+  if (!opts.legenda) return barra;
+  return h('div', {}, barra, h('div', { class: 'cleg' }, cats.map((c) => h('span', { class: estado(c), style: { '--cor': c.cor } },
+    icon(estado(c) === 'completo' ? 'check' : c.icone), c.nome, h('b', {}, `${c.feitas}/${c.total}`)))));
+}
 function festaAtiva(fid) { const f = porId('festas', fid); return f && !['Realizada', 'Cancelada'].includes(f.status) ? f : null; }
 function temaDe(f) { return f && f.temaId ? porId('temas', f.temaId) : null; }
 
 function linhaTarefa(t, mostrarFesta) {
   const p = prazoInfo(t.prazo), f = porId('festas', t.festaId);
-  const cb = h('input', { type: 'checkbox', checked: t.feita, onchange: async () => {
+  const cb = h('input', { type: 'checkbox', checked: t.feita, disabled: !!t.auto, title: t.auto ? 'Marcada automaticamente: ' + t.auto : '', onchange: async () => {
     cb.disabled = true;
     try { await salvar('tarefas', { id: t.id, feita: cb.checked }); render(); } catch (e) { cb.checked = !cb.checked; cb.disabled = false; }
   } });
@@ -680,7 +793,7 @@ function linhaTarefa(t, mostrarFesta) {
       h('div', { class: 's' },
         mostrarFesta && f ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); ir('festa', { id: f.id, aba: 'checklist' }); } }, f.nome) : null,
         mostrarFesta && f ? ' · ' : null,
-        t.feita ? `feita por ${nomePessoa(t.feitaPor)}` : h('span', { class: p.cls }, p.txt),
+        t.auto ? 'automático: ' + t.auto : t.feita ? `feita por ${nomePessoa(t.feitaPor)}` : h('span', { class: p.cls }, p.txt),
         !t.feita && t.responsavel && t.responsavel !== S.me.email ? ` · ${nomePessoa(t.responsavel)}` : null)));
 }
 
@@ -711,14 +824,14 @@ VIEWS.inicio = function () {
           n === 0 ? null : h('div', { class: 'small muted' }, n === 1 ? 'dia' : 'dias'))),
       h('div', { style: { marginTop: '16px' } },
         h('div', { class: 'row small muted', style: { marginBottom: '6px' } }, h('span', { class: 'grow' }, 'Checklist'), `${pr.feitas}/${pr.total}`),
-        h('div', { class: 'bar' }, h('i', { style: { width: (pr.total ? (100 * pr.feitas) / pr.total : 0) + '%' } })))));
+        barraChecklist(prox.id, { grande: true, legenda: true }))));
   } else {
     wrap.appendChild(vazio('Nenhuma festa marcada', 'Comece pelas sugestões de tema ou crie a próxima festa.', btn('Ver sugestões de tema', () => ir('temas'), 'primary')));
   }
 
-  const minhas = lista('tarefas').filter((t) => !t.feita && t.responsavel === S.me.email && festaAtiva(t.festaId))
+  const minhas = tarefasTodas().filter((t) => !t.feita && t.responsavel === S.me.email && festaAtiva(t.festaId))
     .sort((a, b) => ((a.prazo || '9') < (b.prazo || '9') ? -1 : 1));
-  const atrasadas = lista('tarefas').filter((t) => !t.feita && t.prazo && t.prazo < S.hoje && festaAtiva(t.festaId))
+  const atrasadas = tarefasTodas().filter((t) => !t.feita && t.prazo && t.prazo < S.hoje && festaAtiva(t.festaId))
     .sort((a, b) => (a.prazo < b.prazo ? -1 : 1));
   const semDono = prox ? tarefasDa(prox.id).filter((t) => !t.feita && !t.responsavel && t.prazo && diasAte(t.prazo) <= 7) : [];
 
@@ -813,7 +926,7 @@ function cardFesta(f) {
     h('div', { class: 'row small muted' }, parHorario(f)),
     h('div', { class: 'row', style: { margin: '10px 0' } }, tema ? h('span', { class: 'chip' }, tema.nome) : h('span', { class: 'chip' }, 'sem tema'),
       n >= 0 && f.status !== 'Realizada' ? h('span', { class: 'chip' }, n === 0 ? 'é hoje' : `em ${n}d`) : null),
-    h('div', { class: 'bar' }, h('i', { style: { width: (pr.total ? (100 * pr.feitas) / pr.total : 0) + '%' } })),
+    barraChecklist(f.id),
     h('div', { class: 'small faint', style: { marginTop: '5px' } }, `checklist ${pr.feitas}/${pr.total}`));
 }
 
@@ -981,33 +1094,49 @@ function festaChecklist(f) {
   };
   nova.addEventListener('keydown', (e) => { if (e.key === 'Enter') criar(); });
   const pr = progresso(f.id);
+  const linha = (t) => {
+    const p = prazoInfo(t.prazo);
+    const resp = sel([['', 'sem responsável']].concat(equipe.map((x) => [x.email, x.nome])), t.responsavel || '',
+      { style: { width: 'auto', maxWidth: '170px', padding: '6px 8px', fontSize: '13px' }, onchange: async () => { await salvar('tarefas', { id: t.id, responsavel: resp.value }); } });
+    const cb = h('input', { type: 'checkbox', checked: t.feita, disabled: !!t.auto, title: t.auto ? 'Marcada automaticamente: ' + t.auto : '',
+      onchange: async () => { await salvar('tarefas', { id: t.id, feita: cb.checked }); render(); } });
+    return h('div', { class: 'li tarefa' + (t.feita ? ' feita' : '') + (t.auto ? ' auto' : '') }, cb,
+      h('span', { class: 't-ico' }, icon(iconeTarefa(t))),
+      h('div', { class: 't' }, h('div', { class: t.feita ? 'done' : '' }, t.titulo),
+        h('div', { class: 's' }, t.auto ? h('span', { class: 'auto-chip' }, icon('cadeado'), 'automático: ' + t.auto)
+          : t.feita ? `feita por ${nomePessoa(t.feitaPor)} em ${fmtQuando(t.feitaEm)}` : h('span', { class: p.cls }, p.txt),
+          t.offset !== null && t.offset !== undefined ? h('span', { class: 'faint' }, ` · D${t.offset >= 0 ? '+' : ''}${t.offset}`) : null)),
+      resp, btn('', () => editarTarefa(t), 'ghost sm', 'editar'));
+  };
+  const blocos = progressoPorCategoria(f.id).filter((c) => c.total).map((c) => {
+    const estado = c.feitas === c.total ? 'completo' : c.feitas ? 'andamento' : 'vazio';
+    return h('div', { class: 'card cat ' + estado, style: { '--cor': c.cor } },
+      h('div', { class: 'cat-head' }, h('span', { class: 'cat-ico' }, icon(estado === 'completo' ? 'check' : c.icone)),
+        h('div', { class: 'grow' }, h('h3', { style: { margin: 0 } }, c.nome),
+          h('div', { class: 'small muted' }, estado === 'completo' ? 'Tudo pronto!' : `${c.feitas} de ${c.total} feitas`)),
+        h('div', { class: 'cat-num' }, `${c.feitas}/${c.total}`)),
+      h('div', { class: 'cbar', style: { marginTop: '10px' } }, h('div', { class: 'seg ' + estado, style: { flex: '1', '--cor': c.cor } }, h('i', { style: { width: (100 * c.feitas) / c.total + '%' } }))),
+      h('div', { class: 'list', style: { marginTop: '8px' } }, c.tarefas.map(linha)));
+  });
   return h('div', { class: 'stack' },
     h('div', { class: 'card' },
-      h('div', { class: 'row small muted', style: { marginBottom: '6px' } }, h('span', { class: 'grow' }, `${pr.feitas} de ${pr.total} feitas`), `festa em ${fmtData(f.data)}`),
-      h('div', { class: 'bar' }, h('i', { style: { width: (pr.total ? (100 * pr.feitas) / pr.total : 0) + '%' } })),
-      h('div', { class: 'list', style: { marginTop: '8px' } }, ts.map((t) => {
-        const p = prazoInfo(t.prazo);
-        const resp = sel([['', 'sem responsável']].concat(equipe.map((x) => [x.email, x.nome])), t.responsavel || '',
-          { style: { width: 'auto', maxWidth: '170px', padding: '6px 8px', fontSize: '13px' }, onchange: async () => { await salvar('tarefas', { id: t.id, responsavel: resp.value }); } });
-        const cb = h('input', { type: 'checkbox', checked: t.feita, onchange: async () => { await salvar('tarefas', { id: t.id, feita: cb.checked }); render(); } });
-        return h('div', { class: 'li tarefa' }, cb,
-          h('div', { class: 't' }, h('div', { class: t.feita ? 'done' : '' }, t.titulo),
-            h('div', { class: 's' }, t.feita ? `feita por ${nomePessoa(t.feitaPor)} em ${fmtQuando(t.feitaEm)}` : h('span', { class: p.cls }, p.txt),
-              t.offset !== null && t.offset !== undefined ? h('span', { class: 'faint' }, ` · D${t.offset >= 0 ? '+' : ''}${t.offset}`) : null)),
-          resp, btn('', () => editarTarefa(t), 'ghost sm', 'editar'));
-      }))),
+      h('div', { class: 'row small muted', style: { marginBottom: '8px' } }, h('span', { class: 'grow' }, `${pr.feitas} de ${pr.total} feitas`), `festa em ${fmtData(f.data)}`),
+      barraChecklist(f.id, { grande: true, legenda: true })),
+    blocos,
     h('div', { class: 'row' }, h('div', { class: 'grow' }, nova), novaPrazo, btn('Adicionar', criar, 'primary', 'plus')),
-    h('div', { class: 'hint' }, 'As tarefas padrão seguem a data da festa (D-30, D-7…). Se você mudar o prazo de uma tarefa na mão, ela deixa de acompanhar a data.'));
+    h('div', { class: 'hint' }, 'As tarefas padrão seguem a data da festa (D-30, D-7…). Se você mudar o prazo de uma tarefa na mão, ela deixa de acompanhar a data. ' +
+      'Algumas se marcam sozinhas (cadeado): tema com a festa confirmada, mapas com o mapa escolhido, atividades com uma atividade cadastrada, escala com todas as funções preenchidas, artes com uma versão aprovada de cada peça e, depois da data da festa, tudo menos as métricas.'));
 }
 
 function editarTarefa(t) {
   const titulo = inp({ value: t.titulo });
   const prazo = inp({ type: 'date', value: t.prazo || '' });
+  const cat = sel(CATEGORIAS_TAREFA.map((c) => [c.k, c.nome]), categoriaDe(t));
   const m = modal({
-    titulo: 'Editar tarefa', corpo: h('div', { class: 'form' }, campo('Tarefa', titulo, { full: true }), campo('Prazo', prazo)),
+    titulo: 'Editar tarefa', corpo: h('div', { class: 'form' }, campo('Tarefa', titulo, { full: true }), campo('Prazo', prazo), campo('Categoria', cat)),
     acoes: [btn('Excluir', async () => { if (await excluir('tarefas', t.id, t.titulo)) { m.fechar(); render(); } }, 'ghost danger'), h('span', { class: 'grow' }),
       btn('Cancelar', () => m.fechar(), 'ghost'),
-      btn('Salvar', async () => { await salvar('tarefas', { id: t.id, titulo: titulo.value.trim(), prazo: prazo.value }); m.fechar(); render(); }, 'primary')]
+      btn('Salvar', async () => { await salvar('tarefas', { id: t.id, titulo: titulo.value.trim(), prazo: prazo.value, categoria: cat.value }); m.fechar(); render(); }, 'primary')]
   });
 }
 
@@ -2335,9 +2464,10 @@ function modeloChecklist() {
     h('div', { class: 'hint' }, 'Toda festa nova recebe estas tarefas. D-7 = 7 dias antes da festa; D+2 = 2 dias depois. Mudanças aqui valem para as próximas festas criadas.'),
     h('div', { class: 'card' }, h('div', { class: 'list' }, itens.map((it) => {
       const o = inp({ type: 'number', value: it.offset, style: { width: '80px', padding: '6px 8px' } }), t = inp({ value: it.titulo, style: { padding: '6px 10px' } });
-      const sv = async () => { await salvar('tarefaModelo', { id: it.id, offset: Number(o.value) || 0, titulo: t.value.trim() }); toast('Salvo', 'ok'); };
-      o.addEventListener('change', async () => { await sv(); render(); }); t.addEventListener('change', sv);
-      return h('div', { class: 'li' }, h('span', { class: 'faint small', style: { width: '18px' } }, 'D'), o, h('div', { class: 't' }, t),
+      const cat = sel(CATEGORIAS_TAREFA.map((c) => [c.k, c.nome]), categoriaDe(it), { style: { width: 'auto', padding: '6px 8px', fontSize: '13px', color: corCategoria(categoriaDe(it)) } });
+      const sv = async () => { await salvar('tarefaModelo', { id: it.id, offset: Number(o.value) || 0, titulo: t.value.trim(), categoria: cat.value }); toast('Salvo', 'ok'); };
+      o.addEventListener('change', async () => { await sv(); render(); }); t.addEventListener('change', sv); cat.addEventListener('change', async () => { await sv(); render(); });
+      return h('div', { class: 'li' }, h('span', { class: 'faint small', style: { width: '18px' } }, 'D'), o, h('div', { class: 't' }, t), cat,
         btn('', async () => { if (await excluir('tarefaModelo', it.id, it.titulo)) render(); }, 'ghost sm danger', 'x'));
     }))),
     h('div', { class: 'row' }, h('span', { class: 'faint' }, 'D'), off, h('div', { class: 'grow' }, titulo),
