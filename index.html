@@ -799,11 +799,15 @@ function autoMotivo(t, f) {
     const funcoes = lista('funcoes'), esc = lista('escala').filter((e) => e.festaId === f.id && e.pessoa);
     if (funcoes.length && funcoes.every((fn) => esc.some((e) => e.funcaoId === fn.id))) return 'todas as funções preenchidas';
   }
-  if (/^artes?\b|montar artes/.test(x)) {
-    const nomes = [...new Set(artesDa(f.id).map((a) => a.nome))];
-    if (nomes.length && nomes.every((n) => artesDa(f.id).some((a) => a.nome === n && a.status === 'Aprovada'))) return 'artes aprovadas';
-  }
+  if (/^artes?\b|montar artes/.test(x) && artesAprovadas(f.id).completo) return 'artes aprovadas';
   return '';
+}
+// artes aprovadas por TIPO de peça (story, feed, banner, contagens, DJs, carrossel): basta uma aprovada de cada tipo
+function artesAprovadas(fid) {
+  const arts = artesDa(fid);
+  const tipos = [...new Set(arts.map((a) => a.peca))];
+  const ok = tipos.filter((t) => arts.some((a) => a.peca === t && a.status === 'Aprovada'));
+  return { tipos: tipos.length, aprovados: ok.length, completo: tipos.length > 0 && ok.length === tipos.length };
 }
 function comAuto(t, f) {
   if (t.feita) return t;
@@ -2324,13 +2328,13 @@ VIEWS.artes = function () {
 function cardArtesFesta(f) {
   const A = arteDe(f), arts = artesDa(f.id), ped = pedidosDa(f.id)[0];
   const nomes = [...new Set(arts.map((a) => a.nome))];
-  const aprovadas = nomes.filter((n) => arts.some((a) => a.nome === n && a.status === 'Aprovada'));
+  const apr = artesAprovadas(f.id);
   const anim = lista('pedidosAnimacao').filter((p) => p.festaId === f.id).sort((a, b) => b.versao - a.versao)[0];
   // miniaturas: a versão mais recente de cada peça (aprovadas primeiro)
   const recentes = nomes.map((n) => arts.filter((a) => a.nome === n).sort((a, b) => b.versao - a.versao)[0])
     .sort((a, b) => (b.status === 'Aprovada') - (a.status === 'Aprovada') || (a.ordem || 0) - (b.ordem || 0)).slice(0, 4);
   const etapa = !A.logo ? ['Falta o logo', 'st-Cancelada'] : !ped ? ['Pronta para pedir', 'st-Ideia'] : ped.status === 'Na fila' ? ['Na fila', 'st-Testando']
-    : aprovadas.length === nomes.length && nomes.length ? ['Tudo aprovado', 'st-Realizada'] : ['Em aprovação', 'st-Planejando'];
+    : apr.completo ? ['Tudo aprovado', 'st-Realizada'] : ['Em aprovação', 'st-Planejando'];
   const logo = A.logo ? thumbDrive(A.logo.fileId, 'checker') : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--faint)' } }, icon('imagem'));
   logo.style.width = '64px'; logo.style.height = '64px'; logo.style.aspectRatio = '1'; logo.style.flex = 'none';
   return h('div', { class: 'card click', onclick: () => ir('festa', { id: f.id, aba: 'artes' }) },
@@ -2346,7 +2350,7 @@ function cardArtesFesta(f) {
       return th;
     })) : null,
     h('div', { class: 'row small muted', style: { marginTop: '10px', gap: '14px' } },
-      nomes.length ? h('span', {}, `${aprovadas.length}/${nomes.length} peças aprovadas`) : h('span', {}, 'sem artes ainda'),
+      apr.tipos ? h('span', {}, `${apr.aprovados}/${apr.tipos} tipos de peça aprovados`) : h('span', {}, 'sem artes ainda'),
       anim ? h('span', {}, icon('play'), ' animações: ' + anim.status.toLowerCase()) : null));
 }
 
