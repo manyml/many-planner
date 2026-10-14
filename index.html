@@ -2049,7 +2049,7 @@ function secaoPedido(f, A, liberaStatus) {
 }
 
 // ---------- Animações (motion graphics das artes aprovadas) ----------
-const PECAS_ANIMACAO = ['story', 'feed', 'djs', 'faltam7', 'faltam3', 'amanha', 'hoje'];
+const PECAS_ANIMACAO = ['story', 'feed', 'djs'];
 function faltasAnimacao(f) {
   const ok = artesDa(f.id).filter((x) => x.status === 'Aprovada' && PECAS_ANIMACAO.includes(x.peca));
   const faltas = [];
@@ -2087,7 +2087,7 @@ function secaoAnimacoes(f, A) {
     } catch (e) { bPedir.disabled = false; bPedir.lastChild.textContent = 'Solicitar animações'; }
   });
   const card = h('div', { class: 'card' }, h('h3', {}, 'Animações'),
-    h('div', { class: 'small muted', style: { marginBottom: '10px' } }, 'Story, feed e stories dos DJs (e as contagens aprovadas) viram vídeos curtos com motion graphics e trilha, a partir das artes aprovadas.'),
+    h('div', { class: 'small muted', style: { marginBottom: '10px' } }, 'O story de anúncio, o post do feed e os stories dos DJs viram vídeos curtos com motion graphics e trilha, a partir das artes aprovadas.'),
     trilhaBox, h('div', { style: { marginTop: '10px' } }, obs),
     h('div', { class: 'row end', style: { marginTop: '12px' } },
       faltas.length ? h('span', { class: 'hint grow' }, 'Libera quando estiverem aprovadas: ' + faltas.join(', ') + '.') : null, bPedir));
