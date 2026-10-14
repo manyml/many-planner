@@ -403,6 +403,7 @@ const ICONS = {
   mais: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  artes: '<path d="M12 22a10 10 0 1 1 10-10c0 2.2-1.8 3-3.5 3H16a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 22z"/><circle cx="7.5" cy="10.5" r="1.2"/><circle cx="12" cy="7" r="1.2"/><circle cx="16.5" cy="10.5" r="1.2"/>',
   megafone: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/>',
   raio: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   prancheta: '<rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
@@ -690,13 +691,16 @@ function seletorRegiao() {
 // Navegação
 // =====================================================================
 
-const NAV = [
-  ['inicio', 'Início'], ['festas', 'Festas'], ['roteiros', 'Roteiros'], ['temas', 'Temas'], ['djs', 'DJs'], ['mapas', 'Mapas']
+// menu lateral em 3 grupos (separados por uma linha)
+const NAV_GRUPOS = [
+  [['inicio', 'Início'], ['festas', 'Festas'], ['temas', 'Temas'], ['mapas', 'Mapas']],
+  [['artes', 'Artes'], ['roteiros', 'Roteiros']],
+  [['djs', 'DJs'], ['equipe', 'Equipe e ajustes'], ['lixeira', 'Lixeira'], ['historico', 'Histórico']]
 ];
-const NAV2 = [['equipe', 'Equipe e ajustes'], ['lixeira', 'Lixeira'], ['historico', 'Histórico']];
+const NAV = [].concat(...NAV_GRUPOS);
 // no celular a barra mostra só estas; o resto vai para "Mais"
-const NAV_MOB = ['inicio', 'festas', 'roteiros', 'temas'];
-function navMais() { return NAV.filter(([v]) => !NAV_MOB.includes(v)).concat(NAV2); }
+const NAV_MOB = ['inicio', 'festas', 'temas', 'artes'];
+function navMais() { return NAV.filter(([v]) => !NAV_MOB.includes(v)); }
 
 function ir(v, params) {
   S.rota = Object.assign({ v }, params || {});
@@ -707,16 +711,16 @@ function ir(v, params) {
 function navAtiva(v) {
   const r = S.rota.v;
   if (v === 'roteiros') return r === 'roteiros' || (r === 'festa' && S.rota.aba === 'roteiro');
-  return r === v || (v === 'festas' && r === 'festa' && S.rota.aba !== 'roteiro') || (v === 'djs' && r === 'dj');
+  if (v === 'artes') return r === 'artes' || (r === 'festa' && S.rota.aba === 'artes');
+  return r === v || (v === 'festas' && r === 'festa' && !['roteiro', 'artes'].includes(S.rota.aba)) || (v === 'djs' && r === 'dj');
 }
 
 function render() {
   const main = h('main', { class: 'main' });
   const side = h('aside', { class: 'side' },
     h('img', { class: 'logo', src: window.MANY_LOGO, alt: 'Many' }),
-    NAV.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t)),
-    h('div', { class: 'sep' }),
-    NAV2.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t)),
+    NAV_GRUPOS.map((g, i) => [i ? h('div', { class: 'sep' }) : null,
+      g.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t))]),
     h('div', { class: 'me' },
       h('div', { class: 'me-row' },
         avatar(S.me.email, 40, { class: 'avatar clicavel', title: 'Trocar minha foto', onclick: () => { const p = pessoaDe(S.me.email); if (p) trocarFoto(p); } }),
@@ -2300,6 +2304,50 @@ function secaoAnimacoes(f, A) {
       (p.creditos || []).length ? h('div', { class: 'small faint', style: { marginTop: '8px' } }, p.creditos.join(' · ')) : null));
   });
   return card;
+}
+
+// ---------- tela Artes: visão geral das artes de todas as festas ----------
+VIEWS.artes = function () {
+  const filtro = S.rota.filtro || 'proximas';
+  let fs = festasOrdenadas().filter((f) => f.status !== 'Cancelada');
+  if (filtro === 'proximas') fs = fs.filter((f) => f.data >= S.hoje);
+  else fs = fs.filter((f) => f.data < S.hoje).reverse();
+  const naFila = lista('pedidosArte').filter((p) => p.status === 'Na fila').length + lista('pedidosAnimacao').filter((p) => p.status === 'Na fila').length;
+  return h('div', {},
+    topo('Artes'),
+    naFila ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `${naFila} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; depois abra a festa e clique em "Verificar artes prontas".`) : null,
+    abas([['proximas', 'Próximas festas'], ['passadas', 'Passadas']], filtro, (k) => ir('artes', { filtro: k })),
+    fs.length ? h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' } }, fs.map(cardArtesFesta))
+      : vazio('Nenhuma festa aqui', 'As artes de cada festa aparecem aqui assim que ela for criada.'));
+};
+
+function cardArtesFesta(f) {
+  const A = arteDe(f), arts = artesDa(f.id), ped = pedidosDa(f.id)[0];
+  const nomes = [...new Set(arts.map((a) => a.nome))];
+  const aprovadas = nomes.filter((n) => arts.some((a) => a.nome === n && a.status === 'Aprovada'));
+  const anim = lista('pedidosAnimacao').filter((p) => p.festaId === f.id).sort((a, b) => b.versao - a.versao)[0];
+  // miniaturas: a versão mais recente de cada peça (aprovadas primeiro)
+  const recentes = nomes.map((n) => arts.filter((a) => a.nome === n).sort((a, b) => b.versao - a.versao)[0])
+    .sort((a, b) => (b.status === 'Aprovada') - (a.status === 'Aprovada') || (a.ordem || 0) - (b.ordem || 0)).slice(0, 4);
+  const etapa = !A.logo ? ['Falta o logo', 'st-Cancelada'] : !ped ? ['Pronta para pedir', 'st-Ideia'] : ped.status === 'Na fila' ? ['Na fila', 'st-Testando']
+    : aprovadas.length === nomes.length && nomes.length ? ['Tudo aprovado', 'st-Realizada'] : ['Em aprovação', 'st-Planejando'];
+  const logo = A.logo ? thumbDrive(A.logo.fileId, 'checker') : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--faint)' } }, icon('imagem'));
+  logo.style.width = '64px'; logo.style.height = '64px'; logo.style.aspectRatio = '1'; logo.style.flex = 'none';
+  return h('div', { class: 'card click', onclick: () => ir('festa', { id: f.id, aba: 'artes' }) },
+    h('div', { class: 'row', style: { gap: '12px', alignItems: 'center' } }, logo,
+      h('div', { class: 'grow', style: { minWidth: 0 } }, h('h4', { style: { margin: 0 } }, f.nome),
+        h('div', { class: 'small muted' }, fmtData(f.data)),
+        h('div', { class: 'row', style: { marginTop: '6px' } }, h('span', { class: 'chip ' + etapa[1] }, etapa[0]),
+          ped ? h('span', { class: 'chip' }, 'v' + ped.versao) : null))),
+    recentes.length ? h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '12px' } }, recentes.map((x) => {
+      const th = thumbDrive(x.fileId, '', null);
+      th.style.aspectRatio = '9 / 14'; th.style.backgroundSize = 'cover';
+      if (x.status === 'Aprovada') th.appendChild(h('span', { class: 'lbl' }, icon('check')));
+      return th;
+    })) : null,
+    h('div', { class: 'row small muted', style: { marginTop: '10px', gap: '14px' } },
+      nomes.length ? h('span', {}, `${aprovadas.length}/${nomes.length} peças aprovadas`) : h('span', {}, 'sem artes ainda'),
+      anim ? h('span', {}, icon('play'), ' animações: ' + anim.status.toLowerCase()) : null));
 }
 
 function secaoGeradas(f, pedidos) {
