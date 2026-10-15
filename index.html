@@ -81,6 +81,25 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid color-mix(in srgb, var(--a1) 45%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px; }
 .graf-dica b { display: block; font-size: 13px; color: var(--text); }
 .graf-dica span { display: block; color: var(--muted); }
+.noites-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.noite-card { border: 1px solid var(--line, rgba(255,255,255,.08)); border-radius: 14px; padding: 12px 14px; cursor: pointer;
+  background: color-mix(in srgb, var(--a1) 3%, transparent); transition: border-color .2s, transform .2s; }
+.noite-card:hover { border-color: color-mix(in srgb, var(--a1) 55%, transparent); transform: translateY(-2px); }
+.noite-nome { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noite-barra { height: 4px; border-radius: 4px; background: rgba(255,255,255,.06); margin: 10px 0; overflow: hidden; }
+.noite-barra i { display: block; height: 100%; border-radius: 4px; background: var(--a1); }
+.ntiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.ntile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 8px 4px; border-radius: 10px;
+  background: rgba(255,255,255,.04); min-width: 0; }
+.ntile-ic { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--a1);
+  background: color-mix(in srgb, var(--a1) 14%, transparent); }
+.ntile-ic svg { width: 15px; height: 15px; }
+.ntile b { font-size: 15px; line-height: 1.2; white-space: nowrap; }
+.ntile-l { font-size: 10.5px; color: var(--muted); line-height: 1.2; }
+.ntile.insta .ntile-ic { color: #ff4fb8; background: color-mix(in srgb, #ff4fb8 16%, transparent); }
+.ntile.vazio { border: 1px dashed color-mix(in srgb, #ff4fb8 40%, transparent); background: none; }
+.ntile.vazio b { color: #ff4fb8; }
+@media (max-width: 420px) { .ntiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .graf-legenda { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .graf-legenda span::before { content: ''; display: inline-block; width: 12px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--a1); }
 .graf-legenda .l-insta::before { height: 3px; vertical-align: 3px; background: #ff4fb8; }
@@ -420,6 +439,10 @@ const ICONS = {
   equipe: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   lixeira: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
   metricas: '<path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/>',
+  relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pico: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  novo: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/>',
+  insta: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor"/>',
   historico: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
   mais: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -1424,13 +1447,7 @@ VIEWS.metricas = function () {
           maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total')),
         cruzamentoInsta(noites.slice().reverse(), stat),
         graficoFestas(noites.slice().reverse())),
-      h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'list' }, noites.map((n) => h('div', { class: 'li click', onclick: () => ir('metricas', { noite: n.noite }) },
-        h('div', { class: 't' }, h('div', {}, h('b', {}, nomeNoite(n))),
-          h('div', { class: 's' }, `${fmtNoite(n.noite)} · ${n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo}`)),
-        h('div', { class: 'small muted vrcx-nums' }, `${n.unicos} pessoas · pico ${n.pico} · ${fmtMin(n.tempoMedioMin)} · ${n.novos} novos` +
-          (seguidoresDe(n) ? ` · ${fmtNum(seguidoresDe(n))} no Insta` : '')),
-        btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
-        btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')))),
+      h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'noites-grade' }, noites.map((n) => cardNoite(n, maior))),
         apagadas.length ? h('div', { class: 'small muted', style: { marginTop: '10px' } },
           h('a', { href: '#', onclick: (e) => { e.preventDefault(); S.verApagadas = !S.verApagadas; render(); } },
             `${apagadas.length} registro(s) apagado(s) · ${S.verApagadas ? 'esconder' : 'mostrar'}`)) : null,
@@ -1442,6 +1459,30 @@ VIEWS.metricas = function () {
           h('div', { class: 't' }, h('div', {}, p.nome), h('div', { class: 's' }, `${p.noites} de ${noites.length} festas`)),
           h('span', { class: 'small muted' }, fmtMin(p.minutos) + ' no total')))))));
 };
+
+// card de uma festa na lista: cabeçalho + um quadradinho com ícone para cada número
+function cardNoite(n, maior) {
+  const seg = seguidoresDe(n);
+  const tile = (ic, valor, rotulo, cls) => h('div', { class: 'ntile ' + (cls || '') }, h('span', { class: 'ntile-ic' }, icon(ic)),
+    h('b', {}, valor), h('span', { class: 'ntile-l' }, rotulo));
+  const inst = n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo;
+  return h('div', { class: 'noite-card click', onclick: () => ir('metricas', { noite: n.noite }) },
+    h('div', { class: 'row', style: { alignItems: 'flex-start' } },
+      h('div', { class: 'grow', style: { minWidth: 0 } }, h('b', { class: 'noite-nome' }, nomeNoite(n)),
+        h('div', { class: 'small muted' }, `${fmtNoite(n.noite)} · ${inst}`)),
+      btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
+      btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')),
+    // barrinha: público dessa festa comparado com a maior
+    h('div', { class: 'noite-barra' }, h('i', { style: { width: Math.round((n.unicos / (maior ? maior.unicos : n.unicos)) * 100) + '%' } })),
+    h('div', { class: 'ntiles' },
+      tile('equipe', n.unicos, 'pessoas'),
+      tile('pico', n.pico, `pico · ${horaBR(n.picoEm)}`),
+      tile('relogio', fmtMin(n.tempoMedioMin || 0), 'tempo médio'),
+      tile('novo', n.novos, '1ª vez'),
+      seg !== null ? tile('insta', fmtNum(seg), 'no Insta', 'insta')
+        : h('div', { class: 'ntile insta vazio', onclick: (e) => { e.stopPropagation(); renomearNoite(n); } },
+          h('span', { class: 'ntile-ic' }, icon('insta')), h('b', {}, '+'), h('span', { class: 'ntile-l' }, 'anotar Insta'))));
+}
 
 // Insta x VRChat: seguidores ganhos entre as festas anotadas, comparados com o público delas
 function cruzamentoInsta(noites, stat) {
