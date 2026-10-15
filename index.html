@@ -80,7 +80,10 @@ img { max-width: 100%; }
 .graf-dica { display: none; position: absolute; pointer-events: none; z-index: 5; white-space: nowrap; padding: 7px 10px; border-radius: 10px;
   background: var(--surface); border: 1px solid color-mix(in srgb, var(--a1) 45%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px; }
 .graf-dica b { display: block; font-size: 13px; color: var(--text); }
-.graf-dica span { color: var(--muted); }
+.graf-dica span { display: block; color: var(--muted); }
+.graf-legenda { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.graf-legenda span::before { content: ''; display: inline-block; width: 12px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--a1); }
+.graf-legenda .l-insta::before { height: 3px; vertical-align: 3px; background: #ff4fb8; }
 .vrcx-graf svg { width: 100%; height: auto; max-height: 180px; display: block; }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
@@ -1360,17 +1363,21 @@ async function restaurarNoite(n) {
   toast('Registro restaurado', 'ok'); render();
 }
 
+function seguidoresDe(n) { const r = registroNoite(n.noite); return r && r.seguidoresInsta ? Number(r.seguidoresInsta) : null; }
+const fmtNum = (x) => Number(x).toLocaleString('pt-BR');
 function renomearNoite(n) {
   const r = registroNoite(n.noite);
   const nome = inp({ value: nomeNoite(n), placeholder: 'Ex.: Halloween 2025' });
+  const seg = inp({ type: 'number', min: 0, value: seguidoresDe(n) || '', placeholder: 'Ex.: 1250' });
   const m = modal({
-    titulo: 'Nome da festa',
-    corpo: h('div', { class: 'stack' }, campo('Nome', nome, { hint: `Noite de ${fmtNoite(n.noite)} · ${n.mundo}` })),
+    titulo: 'Editar festa',
+    corpo: h('div', { class: 'stack' }, campo('Nome', nome, { hint: `Noite de ${fmtNoite(n.noite)} · ${n.mundo}` }),
+      campo('Seguidores no Insta', seg, { hint: 'Quantos seguidores o Insta do Many tinha na noite da festa. Ele é cruzado com o público do VRChat nos dados gerais.' })),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Salvar', async () => {
-      const dados = { noite: n.noite, nome: nome.value.trim() };
+      const dados = { noite: n.noite, nome: nome.value.trim(), seguidoresInsta: seg.value === '' ? null : Math.round(Number(seg.value)) };
       if (r) dados.id = r.id;
       await salvar('noitesMetricas', dados);
-      m.fechar(); toast('Nome salvo', 'ok'); render();
+      m.fechar(); toast('Festa salva', 'ok'); render();
     }, 'primary')]
   });
   setTimeout(() => nome.select(), 50);
@@ -1390,10 +1397,11 @@ VIEWS.metricas = function () {
   if (sel_) {
     const f = festaDaNoite(sel_.noite);
     return h('div', {},
-      topo(nomeNoite(sel_), h('div', { class: 'row' }, btn('Renomear', () => renomearNoite(sel_), '', 'editar'),
+      topo(nomeNoite(sel_), h('div', { class: 'row' }, btn('Editar', () => renomearNoite(sel_), '', 'editar'),
         btn('Apagar', async () => { if (await apagarNoite(sel_)) ir('metricas'); }, 'ghost danger', 'lixeira'),
         f ? btn('Abrir festa', () => ir('festa', { id: f.id, aba: 'metricas' }), 'ghost') : null), () => ir('metricas')),
       h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
+      seguidoresDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Seguidores no Insta nessa noite: ${fmtNum(seguidoresDe(sel_))}`) : null,
       h('div', { class: 'card' }, painelVrcx(sel_)));
   }
   // resumo geral
@@ -1414,11 +1422,13 @@ VIEWS.metricas = function () {
       h('div', { class: 'card stack' },
         h('div', { class: 'vrcx-stats' }, stat(noites.length, 'festas registradas'), stat(media, 'público médio'),
           maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total')),
+        cruzamentoInsta(noites.slice().reverse(), stat),
         graficoFestas(noites.slice().reverse())),
       h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'list' }, noites.map((n) => h('div', { class: 'li click', onclick: () => ir('metricas', { noite: n.noite }) },
         h('div', { class: 't' }, h('div', {}, h('b', {}, nomeNoite(n))),
           h('div', { class: 's' }, `${fmtNoite(n.noite)} · ${n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo}`)),
-        h('div', { class: 'small muted vrcx-nums' }, `${n.unicos} pessoas · pico ${n.pico} · ${fmtMin(n.tempoMedioMin)} · ${n.novos} novos`),
+        h('div', { class: 'small muted vrcx-nums' }, `${n.unicos} pessoas · pico ${n.pico} · ${fmtMin(n.tempoMedioMin)} · ${n.novos} novos` +
+          (seguidoresDe(n) ? ` · ${fmtNum(seguidoresDe(n))} no Insta` : '')),
         btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
         btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')))),
         apagadas.length ? h('div', { class: 'small muted', style: { marginTop: '10px' } },
@@ -1433,6 +1443,23 @@ VIEWS.metricas = function () {
           h('span', { class: 'small muted' }, fmtMin(p.minutos) + ' no total')))))));
 };
 
+// Insta x VRChat: seguidores ganhos entre as festas anotadas, comparados com o público delas
+function cruzamentoInsta(noites, stat) {
+  const com = noites.filter((n) => seguidoresDe(n) !== null);
+  if (!com.length) return h('div', { class: 'hint' }, 'Anote os seguidores do Insta em cada festa (lápis) para cruzar com o público do VRChat.');
+  const ult = com[com.length - 1];
+  if (com.length < 2) return h('div', { class: 'vrcx-stats' }, stat(fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult)));
+  const prim = com[0], ganho = seguidoresDe(ult) - seguidoresDe(prim);
+  // público somado das festas depois da primeira anotada (é delas que vêm os seguidores ganhos)
+  const publico = com.slice(1).reduce((s, n) => s + n.unicos, 0);
+  const porFesta = Math.round(ganho / (com.length - 1));
+  return h('div', { class: 'vrcx-stats' },
+    stat(fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult)),
+    stat((ganho >= 0 ? '+' : '') + fmtNum(ganho), 'seguidores desde ' + nomeNoite(prim)),
+    stat((porFesta >= 0 ? '+' : '') + fmtNum(porFesta), 'seguidores por festa, em média'),
+    stat(publico ? (Math.round((ganho / publico) * 1000) / 10).toLocaleString('pt-BR') : '—', 'novos seguidores a cada 100 pessoas no VRChat'));
+}
+
 // público (pessoas únicas) de cada festa, em ordem de data
 function graficoFestas(noites) {
   if (noites.length < 2) return null;
@@ -1443,11 +1470,27 @@ function graficoFestas(noites) {
       `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 20 - alt).toFixed(1)}" font-size="11" text-anchor="middle" fill="var(--muted)">${n.unicos}</text>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="var(--faint)">${fmtNoite(n.noite).slice(0, 5)}/${n.noite.slice(2, 4)}</text>`;
   }).join('');
+  // linha dos seguidores do Insta (escala própria, só nas festas que têm o número anotado)
+  const segs = noites.map(seguidoresDe), comSeg = segs.filter((x) => x !== null);
+  let linha = '';
+  if (comSeg.length) {
+    const lo = Math.min(...comSeg), hi = Math.max(...comSeg);
+    const y = (v) => (hi === lo ? 40 : 14 + (1 - (v - lo) / (hi - lo)) * (H - 60));
+    const pts = segs.map((v, i) => (v === null ? null : [i * bw + bw / 2, y(v)])).filter(Boolean);
+    linha = `<polyline points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="#ff4fb8" stroke-width="2.5" stroke-linejoin="round"/>` +
+      pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="#ff4fb8" stroke="var(--surface)" stroke-width="1.5"/>`).join('');
+  }
   const box = h('div', { class: 'vrcx-graf' });
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}</svg>`;
-  dicaGrafico(box, noites.length, (i) => [nomeNoite(noites[i]), `${fmtNoite(noites[i].noite)} · ${noites[i].unicos} pessoas · pico ${noites[i].pico}`],
-    (i) => ir('metricas', { noite: noites[i].noite }));
-  return box;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}${linha}</svg>`;
+  dicaGrafico(box, noites.length, (i) => {
+    const n = noites[i], s = segs[i];
+    const ant = segs.slice(0, i).filter((x) => x !== null).pop();
+    return [nomeNoite(n), `${fmtNoite(n.noite)} · ${n.unicos} pessoas no VRChat · pico ${n.pico}`,
+      s !== null ? `${fmtNum(s)} seguidores no Insta${ant !== undefined ? ` (${s - ant >= 0 ? '+' : ''}${fmtNum(s - ant)} desde a anterior)` : ''}` : 'seguidores no Insta: não anotado'];
+  }, (i) => ir('metricas', { noite: noites[i].noite }));
+  const wrap = h('div', {}, box);
+  if (comSeg.length) wrap.appendChild(h('div', { class: 'graf-legenda' }, h('span', { class: 'l-vrc' }, 'pessoas no VRChat'), h('span', { class: 'l-insta' }, 'seguidores no Insta')));
+  return wrap;
 }
 
 // barras de lotação a cada 15 min, com a hora de Brasília embaixo de hora em hora
@@ -1484,8 +1527,8 @@ function dicaGrafico(box, total, textos, aoClicar) {
       box.querySelectorAll('rect.on').forEach((x) => x.classList.remove('on'));
       const barra = box.querySelector(`rect[data-i="${i}"]`);
       if (barra) barra.classList.add('on');
-      const [titulo, sub] = textos(i);
-      dica.replaceChildren(h('b', {}, titulo), h('span', {}, sub));
+      const [titulo, ...linhas] = textos(i);
+      dica.replaceChildren(h('b', {}, titulo), ...linhas.map((t) => h('span', {}, t)));
       atual = i;
     }
     dica.style.display = 'block';
