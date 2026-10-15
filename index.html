@@ -81,25 +81,30 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid color-mix(in srgb, var(--a1) 45%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px; }
 .graf-dica b { display: block; font-size: 13px; color: var(--text); }
 .graf-dica span { display: block; color: var(--muted); }
-.noites-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
-.noite-card { border: 1px solid var(--line, rgba(255,255,255,.08)); border-radius: 14px; padding: 12px 14px; cursor: pointer;
-  background: color-mix(in srgb, var(--a1) 3%, transparent); transition: border-color .2s, transform .2s; }
-.noite-card:hover { border-color: color-mix(in srgb, var(--a1) 55%, transparent); transform: translateY(-2px); }
-.noite-nome { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.noite-barra { height: 4px; border-radius: 4px; background: rgba(255,255,255,.06); margin: 10px 0; overflow: hidden; }
-.noite-barra i { display: block; height: 100%; border-radius: 4px; background: var(--a1); }
-.ntiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.ntile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 8px 4px; border-radius: 10px;
-  background: rgba(255,255,255,.04); min-width: 0; }
-.ntile-ic { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--a1);
-  background: color-mix(in srgb, var(--a1) 14%, transparent); }
-.ntile-ic svg { width: 15px; height: 15px; }
-.ntile b { font-size: 15px; line-height: 1.2; white-space: nowrap; }
-.ntile-l { font-size: 10.5px; color: var(--muted); line-height: 1.2; }
-.ntile.insta .ntile-ic { color: #ff4fb8; background: color-mix(in srgb, #ff4fb8 16%, transparent); }
-.ntile.vazio { border: 1px dashed color-mix(in srgb, #ff4fb8 40%, transparent); background: none; }
-.ntile.vazio b { color: #ff4fb8; }
-@media (max-width: 420px) { .ntiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tabela-noites-wrap { overflow-x: auto; margin: 0 -4px; }
+.tabela-noites { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 720px; }
+.tabela-noites th { text-align: right; font-weight: 600; font-size: 12px; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
+.tabela-noites th:first-child { text-align: left; }
+.tabela-noites th.ord { cursor: pointer; user-select: none; transition: color .15s; }
+.tabela-noites th.ord:hover, .tabela-noites th.on { color: var(--text); }
+.tabela-noites th.on { color: var(--a1); }
+.tabela-noites th.insta.on { color: #ff4fb8; }
+.th-in { display: inline-flex; align-items: center; gap: 5px; }
+.th-in svg { width: 14px; height: 14px; }
+.th-in .seta { font-size: 10px; opacity: .6; }
+.tabela-noites th.on .seta { opacity: 1; }
+.tabela-noites td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: middle; }
+.tabela-noites tbody tr { cursor: pointer; transition: background .15s; }
+.tabela-noites tbody tr:hover { background: color-mix(in srgb, var(--a1) 7%, transparent); }
+.tabela-noites td.festa b { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabela-noites td.festa span { font-size: 12px; color: var(--muted); }
+.tabela-noites td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabela-noites td.num b { display: block; font-size: 15px; }
+.mini-barra { display: block; height: 3px; width: 64px; margin: 4px 0 0 auto; border-radius: 3px; background: rgba(255,255,255,.07); overflow: hidden; }
+.mini-barra i { display: block; height: 100%; background: var(--a1); border-radius: 3px; }
+.tabela-noites td.insta .mini-barra i { background: #ff4fb8; }
+.tabela-noites .anotar { font-size: 12px; color: #ff4fb8; }
+.tabela-noites td.acoes { white-space: nowrap; text-align: right; width: 1%; }
 .graf-legenda { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .graf-legenda span::before { content: ''; display: inline-block; width: 12px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--a1); }
 .graf-legenda .l-insta::before { height: 3px; vertical-align: 3px; background: #ff4fb8; }
@@ -1447,7 +1452,7 @@ VIEWS.metricas = function () {
           maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total')),
         cruzamentoInsta(noites.slice().reverse(), stat),
         graficoFestas(noites.slice().reverse())),
-      h('div', { class: 'card' }, h('h3', {}, 'Festas'), h('div', { class: 'noites-grade' }, noites.map((n) => cardNoite(n, maior))),
+      h('div', { class: 'card' }, h('h3', {}, 'Festas'), tabelaNoites(noites),
         apagadas.length ? h('div', { class: 'small muted', style: { marginTop: '10px' } },
           h('a', { href: '#', onclick: (e) => { e.preventDefault(); S.verApagadas = !S.verApagadas; render(); } },
             `${apagadas.length} registro(s) apagado(s) · ${S.verApagadas ? 'esconder' : 'mostrar'}`)) : null,
@@ -1460,28 +1465,51 @@ VIEWS.metricas = function () {
           h('span', { class: 'small muted' }, fmtMin(p.minutos) + ' no total')))))));
 };
 
-// card de uma festa na lista: cabeçalho + um quadradinho com ícone para cada número
-function cardNoite(n, maior) {
-  const seg = seguidoresDe(n);
-  const tile = (ic, valor, rotulo, cls) => h('div', { class: 'ntile ' + (cls || '') }, h('span', { class: 'ntile-ic' }, icon(ic)),
-    h('b', {}, valor), h('span', { class: 'ntile-l' }, rotulo));
-  const inst = n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo;
-  return h('div', { class: 'noite-card click', onclick: () => ir('metricas', { noite: n.noite }) },
-    h('div', { class: 'row', style: { alignItems: 'flex-start' } },
-      h('div', { class: 'grow', style: { minWidth: 0 } }, h('b', { class: 'noite-nome' }, nomeNoite(n)),
-        h('div', { class: 'small muted' }, `${fmtNoite(n.noite)} · ${inst}`)),
-      btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
-      btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')),
-    // barrinha: público dessa festa comparado com a maior
-    h('div', { class: 'noite-barra' }, h('i', { style: { width: Math.round((n.unicos / (maior ? maior.unicos : n.unicos)) * 100) + '%' } })),
-    h('div', { class: 'ntiles' },
-      tile('equipe', n.unicos, 'pessoas'),
-      tile('pico', n.pico, `pico · ${horaBR(n.picoEm)}`),
-      tile('relogio', fmtMin(n.tempoMedioMin || 0), 'tempo médio'),
-      tile('novo', n.novos, '1ª vez'),
-      seg !== null ? tile('insta', fmtNum(seg), 'no Insta', 'insta')
-        : h('div', { class: 'ntile insta vazio', onclick: (e) => { e.stopPropagation(); renomearNoite(n); } },
-          h('span', { class: 'ntile-ic' }, icon('insta')), h('b', {}, '+'), h('span', { class: 'ntile-l' }, 'anotar Insta'))));
+// tabela das festas: clicar no cabeçalho ordena por aquela coluna (clicar de novo inverte)
+const COLS_NOITE = [
+  { k: 'noite', t: 'Festa', ic: 'festas', v: (n) => n.noite },
+  { k: 'unicos', t: 'Pessoas', ic: 'equipe', v: (n) => n.unicos },
+  { k: 'pico', t: 'Pico', ic: 'pico', v: (n) => n.pico },
+  { k: 'tempo', t: 'Tempo médio', ic: 'relogio', v: (n) => n.tempoMedioMin || 0 },
+  { k: 'novos', t: '1ª vez', ic: 'novo', v: (n) => n.novos },
+  { k: 'insta', t: 'Insta', ic: 'insta', v: (n) => seguidoresDe(n) }
+];
+function tabelaNoites(noites) {
+  const o = S.ordemNoites || { k: 'noite', dir: -1 };
+  const col = COLS_NOITE.find((c) => c.k === o.k) || COLS_NOITE[0];
+  // sem valor (ex.: Insta não anotado) fica sempre no fim
+  const lista_ = noites.slice().sort((a, b) => {
+    const x = col.v(a), y = col.v(b);
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * o.dir;
+  });
+  const max = {};
+  COLS_NOITE.slice(1).forEach((c) => { max[c.k] = Math.max(1, ...noites.map((n) => c.v(n) || 0)); });
+  const ordenar = (k) => { S.ordemNoites = { k, dir: o.k === k ? -o.dir : -1 }; render(); };
+  const th = (c) => h('th', { class: 'ord' + (o.k === c.k ? ' on' : '') + (c.k === 'insta' ? ' insta' : ''), onclick: () => ordenar(c.k), title: 'Ordenar por ' + c.t.toLowerCase() },
+    h('span', { class: 'th-in' }, icon(c.ic), c.t, h('span', { class: 'seta' }, o.k === c.k ? (o.dir > 0 ? '▲' : '▼') : '↕')));
+  const cel = (c, n, txt) => {
+    const v = c.v(n);
+    if (v === null) return h('td', { class: 'num' }, h('a', { href: '#', class: 'anotar', onclick: (e) => { e.preventDefault(); e.stopPropagation(); renomearNoite(n); } }, '+ anotar'));
+    return h('td', { class: 'num' + (c.k === 'insta' ? ' insta' : '') }, h('b', {}, txt),
+      h('span', { class: 'mini-barra' }, h('i', { style: { width: Math.round((v / max[c.k]) * 100) + '%' } })));
+  };
+  return h('div', { class: 'tabela-noites-wrap' }, h('table', { class: 'tabela-noites' },
+    h('thead', {}, h('tr', {}, COLS_NOITE.map(th), h('th', {}))),
+    h('tbody', {}, lista_.map((n) => {
+      const inst = n.instancias && n.instancias.length > 1 ? n.instancias.map((x) => x.mundo).join(' + ') : n.mundo;
+      return h('tr', { onclick: () => ir('metricas', { noite: n.noite }) },
+        h('td', { class: 'festa' }, h('b', {}, nomeNoite(n)), h('span', {}, `${fmtNoite(n.noite)} · ${inst}`)),
+        cel(COLS_NOITE[1], n, n.unicos),
+        cel(COLS_NOITE[2], n, n.pico),
+        cel(COLS_NOITE[3], n, fmtMin(n.tempoMedioMin || 0)),
+        cel(COLS_NOITE[4], n, n.novos),
+        cel(COLS_NOITE[5], n, seguidoresDe(n) !== null ? fmtNum(seguidoresDe(n)) : ''),
+        h('td', { class: 'acoes' }, btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
+          btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')));
+    }))));
 }
 
 // Insta x VRChat: seguidores ganhos entre as festas anotadas, comparados com o público delas
