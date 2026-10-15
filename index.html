@@ -1471,7 +1471,13 @@ function dicaGrafico(box, total, textos, aoClicar) {
   const dica = h('div', { class: 'graf-dica' });
   box.appendChild(dica);
   let atual = -1;
-  const indice = (e) => { const r = box.getBoundingClientRect(); return Math.min(total - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * total))); };
+  // converte a posição do mouse para as coordenadas do próprio desenho (o SVG pode não ocupar a largura toda da caixa)
+  const svg = box.querySelector('svg');
+  const indice = (e) => {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const x = pt.matrixTransform(svg.getScreenCTM().inverse()).x;
+    return Math.min(total - 1, Math.max(0, Math.floor((x / svg.viewBox.baseVal.width) * total)));
+  };
   box.addEventListener('mousemove', (e) => {
     const i = indice(e), r = box.getBoundingClientRect();
     if (i !== atual) {
