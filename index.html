@@ -527,22 +527,84 @@ function upsert(t, obj) {
   const l = lista(t), i = l.findIndex((x) => x.id === obj.id);
   if (obj.excluido) { if (i >= 0) l.splice(i, 1); return obj; }
   if (i >= 0) l[i] = obj; else l.push(obj);
+  guardarDadosDepois();
   return obj;
 }
-function tirar(t, id) { const l = lista(t), i = l.findIndex((x) => x.id === id); if (i >= 0) l.splice(i, 1); }
+function tirar(t, id) { const l = lista(t), i = l.findIndex((x) => x.id === id); if (i >= 0) l.splice(i, 1); guardarDadosDepois(); }
 
+// Salvar sem esperar o servidor: a tela muda na hora e a gravação vai numa fila (em ordem) por trás.
+// Se o servidor recusar, a mudança é desfeita e aparece o erro. Equipe e métricas esperam o servidor (têm regras lá).
+const SALVA_ESPERANDO = { equipe: true, metricas: true };
+let filaSalvar = Promise.resolve(), salvandoN = 0;
+function idNovo() { const a = new Uint8Array(8); crypto.getRandomValues(a); return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(''); }
+function campoDiferente(a, b) {
+  const meta = ['criadoEm', 'criadoPor', 'atualizadoEm', 'atualizadoPor', 'excluido', 'excluidoEm', 'excluidoPor'];
+  return Object.keys(Object.assign({}, a, b)).some((k) => !meta.includes(k) && JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null));
+}
+// redesenha só se a pessoa não estiver digitando em algum campo da tela (para não perder o que está escrevendo)
+function renderSeguro() {
+  const a = document.activeElement;
+  if (a && app.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox') return;
+  render();
+}
+window.addEventListener('beforeunload', (e) => { if (salvandoN) { e.preventDefault(); e.returnValue = ''; } });
 async function salvar(t, dados) {
-  const r = await run('salvar', { tabela: t, dados });
-  upsert(t, r.salvo);
-  (r.tarefas || []).forEach((x) => upsert('tarefas', x));
-  return r.salvo;
+  if (SALVA_ESPERANDO[t]) {
+    const r = await run('salvar', { tabela: t, dados });
+    upsert(t, r.salvo); anotarOp(t, r.salvo);
+    (r.tarefas || []).forEach((x) => upsert('tarefas', x));
+    guardarDadosDepois();
+    return r.salvo;
+  }
+  const novo = !dados.id;
+  const antes = novo ? null : porId(t, dados.id);
+  const local = Object.assign({}, antes || {}, dados, novo ? { id: idNovo() } : {});
+  if (t === 'tarefas' && antes && dados.feita !== undefined && dados.feita !== antes.feita) Object.assign(local, { feitaPor: dados.feita ? S.me.email : '', feitaEm: dados.feita ? new Date().toISOString() : '' });
+  upsert(t, local); anotarOp(t, local);
+  const args = { tabela: t, dados: novo ? Object.assign({}, dados, { id: local.id }) : dados, novo };
+  salvandoN++; busy(1);
+  filaSalvar = filaSalvar.then(() => api('salvar', args)).then((r) => {
+    upsert(t, r.salvo); anotarOp(t, r.salvo);
+    (r.tarefas || []).forEach((x) => upsert('tarefas', x));
+    guardarDadosDepois();
+    if ((r.tarefas || []).length || campoDiferente(local, r.salvo)) renderSeguro();
+  }).catch((e) => {
+    if (antes) upsert(t, antes); else tirar(t, local.id);
+    toast('Não salvou: ' + (e.erro || 'algo deu errado'), 'err');
+    render();
+  }).finally(() => { salvandoN--; busy(-1); });
+  return local;
 }
 async function excluir(t, id, rotulo) {
   if (!(await confirmar(`Mandar "${rotulo}" para a lixeira? Dá para restaurar depois.`, 'Excluir'))) return false;
+  await filaSalvar;
   await run('excluir', { tabela: t, id });
-  tirar(t, id);
+  tirar(t, id); anotarOp(t, { id, excluido: true });
+  guardarDadosDepois();
   toast('Enviado para a lixeira');
   return true;
+}
+
+// ---------- dados guardados neste navegador (abre na hora com a última versão e atualiza por trás) ----------
+const DADOS_CHAVE = 'mp_dados';
+// mudanças feitas enquanto a carga do servidor ainda está a caminho
+let opsDesdeCarga = null;
+function anotarOp(t, obj) { if (opsDesdeCarga && obj) opsDesdeCarga.push([t, obj]); }
+let tGuardar = 0;
+function guardarDadosDepois() {
+  clearTimeout(tGuardar);
+  tGuardar = setTimeout(() => {
+    try {
+      localStorage.setItem(DADOS_CHAVE, JSON.stringify({ email: (sessao() || {}).email, me: S.me, dados: S.dados, hoje: S.hoje,
+        consts: S.consts, links: S.links, ia: S.ia, artesConsts: S.artesConsts }));
+    } catch (e) { try { localStorage.removeItem(DADOS_CHAVE); } catch (e2) { } }
+  }, 1500);
+}
+function dadosGuardados() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DADOS_CHAVE) || 'null');
+    return d && d.email && d.email === (sessao() || {}).email ? d : null;
+  } catch (e) { return null; }
 }
 
 // ---------- datas ----------
@@ -669,24 +731,67 @@ function estrelas(valor, onchange) {
   return box;
 }
 
-// miniaturas de arquivos do Drive (carregadas sob demanda)
+// miniaturas de arquivos do Drive (carregadas sob demanda): pedidas em lotes e guardadas neste navegador (IndexedDB)
 const thumbCache = {};
+const thumbEspera = {};
+let thumbLote = [], tThumb = 0;
+let thumbDb = null;
+function abrirThumbDb() {
+  if (!thumbDb) {
+    thumbDb = new Promise((res) => {
+      try {
+        const r = indexedDB.open('mp_miniaturas', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('m');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    });
+  }
+  return thumbDb;
+}
+function thumbDbGet(id) {
+  return abrirThumbDb().then((db) => new Promise((res) => {
+    if (!db) return res(undefined);
+    try { const q = db.transaction('m').objectStore('m').get(id); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); } catch (e) { res(undefined); }
+  }));
+}
+function thumbDbPut(id, v) {
+  abrirThumbDb().then((db) => { try { if (db && v) db.transaction('m', 'readwrite').objectStore('m').put(v, id); } catch (e) { } });
+}
+function pedirLoteThumbs() {
+  const ids = thumbLote.splice(0);
+  for (let i = 0; i < ids.length; i += 4) {
+    const parte = ids.slice(i, i + 4);
+    api('miniaturas', { fileIds: parte }).then((r) => parte.forEach((id) => {
+      const u = r[id] || null;
+      thumbCache[id] = u; thumbDbPut(id, u);
+      (thumbEspera[id] || []).forEach((f) => f(u)); delete thumbEspera[id];
+    })).catch(() => parte.forEach((id) => { thumbCache[id] = null; delete thumbEspera[id]; }));
+  }
+}
+function miniatura(fileId, aplicar) {
+  if (!fileId) return;
+  if (thumbCache[fileId] !== undefined) { aplicar(thumbCache[fileId]); return; }
+  if (thumbEspera[fileId]) { thumbEspera[fileId].push(aplicar); return; }
+  thumbEspera[fileId] = [aplicar];
+  thumbDbGet(fileId).then((v) => {
+    if (v) { thumbCache[fileId] = v; (thumbEspera[fileId] || []).forEach((f) => f(v)); delete thumbEspera[fileId]; return; }
+    thumbLote.push(fileId);
+    clearTimeout(tThumb); tThumb = setTimeout(pedirLoteThumbs, 20);
+  });
+}
 function thumbDrive(fileId, cls, label) {
   const el = h('div', { class: 'thumb ' + (cls || '') }, label ? h('span', { class: 'lbl' }, label) : null);
   // no xadrez (PNG transparente) a imagem vai num <img> por cima, para não brigar com o padrão do fundo
-  const aplicar = (src) => {
+  miniatura(fileId, (src) => {
     if (!src) return;
     if (/checker/.test(cls || '')) el.insertBefore(h('img', { src, style: { position: 'absolute', inset: '6px', width: 'calc(100% - 12px)', height: 'calc(100% - 12px)', objectFit: 'contain' } }), el.firstChild);
     else el.style.backgroundImage = `url("${src}")`;
-  };
-  if (thumbCache[fileId] !== undefined) aplicar(thumbCache[fileId]);
-  else api('miniatura', { fileId }).then((u) => { thumbCache[fileId] = u; aplicar(u); }).catch(() => { thumbCache[fileId] = null; });
+  });
   return el;
 }
 function bgDrive(el, fileId) {
-  const aplicar = (u) => { if (u) { el.style.backgroundImage = `url("${u}")`; el.textContent = ''; } };
-  if (thumbCache[fileId] !== undefined) aplicar(thumbCache[fileId]);
-  else api('miniatura', { fileId }).then((u) => { thumbCache[fileId] = u; aplicar(u); }).catch(() => {});
+  miniatura(fileId, (u) => { if (u) { el.style.backgroundImage = `url("${u}")`; el.textContent = ''; } });
 }
 
 function escolherArquivo(accept) {
@@ -1610,12 +1715,7 @@ function dicaGrafico(box, total, textos, aoClicar) {
 }
 
 function festaHistorico(f) {
-  const box = h('div', { class: 'card' }, h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando…'));
-  api('historico', { registroId: f.id, limite: 100 }).then((hs) => {
-    box.innerHTML = '';
-    box.appendChild(hs.length ? listaHistorico(hs) : h('div', { class: 'muted' }, 'Sem registros.'));
-  }).catch((e) => { box.innerHTML = ''; box.appendChild(h('div', { class: 'muted' }, e.erro || 'Erro')); });
-  return box;
+  return listaRemota('histf_' + f.id, 'historico', { registroId: f.id, limite: 100 }, (box, hs) => box.appendChild(hs.length ? listaHistorico(hs) : h('div', { class: 'muted' }, 'Sem registros.')));
 }
 
 function listaHistorico(hs) {
@@ -2988,26 +3088,33 @@ function linksDados() {
 }
 
 // ---------- Lixeira e histórico ----------
-VIEWS.lixeira = function () {
+// lista vinda do servidor: mostra na hora a última resposta guardada e troca quando a nova chegar
+const respostasCache = {};
+function listaRemota(chave, acao, args, desenhar) {
   const box = h('div', { class: 'card' }, h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando…'));
-  api('lixeira').then((itens) => {
-    box.innerHTML = '';
+  const mostrar = (r) => { box.innerHTML = ''; desenhar(box, r); };
+  if (respostasCache[chave]) mostrar(respostasCache[chave]);
+  api(acao, args).then((r) => { respostasCache[chave] = r; mostrar(r); })
+    .catch((e) => { if (!respostasCache[chave]) { box.innerHTML = ''; box.appendChild(h('div', { class: 'muted' }, e.erro || 'Erro')); } });
+  return box;
+}
+
+VIEWS.lixeira = function () {
+  const box = listaRemota('lixeira', 'lixeira', {}, (box, itens) => {
     if (!itens.length) { box.appendChild(h('div', { class: 'muted' }, 'A lixeira está vazia.')); return; }
     box.appendChild(h('div', { class: 'list' }, itens.map((it) => h('div', { class: 'li' },
       h('span', { class: 'chip' }, TABELAS_NOME[it.tabela] || it.tabelaTitulo),
       h('div', { class: 't' }, h('div', {}, it.rotulo), h('div', { class: 's' }, `excluído por ${nomePessoa(it.excluidoPor)} em ${fmtQuando(it.excluidoEm)}`)),
       btn('Restaurar', async () => {
-        const r = await run('restaurar', { tabela: it.tabela, id: it.id }); upsert(it.tabela, r.salvo); toast('Restaurado', 'ok'); render();
+        const r = await run('restaurar', { tabela: it.tabela, id: it.id }); upsert(it.tabela, r.salvo); guardarDadosDepois(); delete respostasCache.lixeira; toast('Restaurado', 'ok'); render();
       }, 'sm', 'restaurar')))));
-  }).catch((e) => { box.innerHTML = ''; box.appendChild(h('div', { class: 'muted' }, e.erro || 'Erro')); });
+  });
   return h('div', {}, topo('Lixeira'), h('div', { class: 'hint', style: { marginBottom: '12px' } }, 'Nada é apagado de verdade: tudo que foi excluído pode voltar daqui.'), box);
 };
 
 VIEWS.historico = function () {
   const filtro = S.rota.tabela || '';
-  const box = h('div', { class: 'card' }, h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando…'));
-  api('historico', { tabela: filtro, limite: 300 }).then((hs) => { box.innerHTML = ''; box.appendChild(hs.length ? listaHistorico(hs) : h('div', { class: 'muted' }, 'Sem registros.')); })
-    .catch((e) => { box.innerHTML = ''; box.appendChild(h('div', { class: 'muted' }, e.erro || 'Erro')); });
+  const box = listaRemota('hist_' + filtro, 'historico', { tabela: filtro, limite: 300 }, (box, hs) => box.appendChild(hs.length ? listaHistorico(hs) : h('div', { class: 'muted' }, 'Sem registros.')));
   const f = sel([['', 'Tudo']].concat(Object.entries(TABELAS_NOME)), filtro, { style: { width: 'auto' }, onchange: () => ir('historico', { tabela: f.value }) });
   return h('div', {}, topo('Histórico', f), box);
 };
@@ -3037,6 +3144,7 @@ async function sairDoApp() {
   if (!(await confirmar('Sair do Many Planner neste aparelho?', 'Sair'))) return;
   try { await api('sair'); } catch (e) { }
   guardarSessao(null);
+  try { localStorage.removeItem(DADOS_CHAVE); } catch (e) { }
   telaLogin();
 }
 
@@ -3082,14 +3190,25 @@ function telaLogin(aviso) {
 }
 
 async function iniciar() {
-  splash(h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando o Many Planner…'));
+  // com dados da última visita a tela abre na hora; a versão nova do servidor chega por trás e redesenha
+  const guardado = window.MP_ROTA_INICIAL ? null : dadosGuardados();
+  if (guardado) {
+    Object.assign(S, { me: guardado.me, dados: guardado.dados, hoje: guardado.hoje, consts: guardado.consts, links: guardado.links, ia: guardado.ia, artesConsts: guardado.artesConsts });
+    render();
+  } else splash(h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando o Many Planner…'));
+  opsDesdeCarga = [];
   try {
     const b = await comPrazo(api('bootstrap'), 45000);
     Object.assign(S, { me: b.me, dados: b.dados, hoje: b.hoje, consts: b.consts, links: b.links, ia: b.ia, artesConsts: b.artesConsts });
+    opsDesdeCarga.forEach(([t, o]) => upsert(t, o));
+    opsDesdeCarga = null;
+    guardarDadosDepois();
     // só no preview local
     if (window.MP_ROTA_INICIAL) S.rota = window.MP_ROTA_INICIAL(S);
-    render();
+    if (guardado) renderSeguro(); else render();
   } catch (e) {
+    opsDesdeCarga = null;
+    if (guardado && !e.semSessao) { toast('Sem conexão com o servidor: mostrando os dados da última visita', 'err'); return; }
     if (e.semSessao) { guardarSessao(null); telaLogin(); return; }
     if (e.precisaConfigurar) {
       splash(h('div', { class: 'stack', style: { alignItems: 'center', textAlign: 'center' } },
