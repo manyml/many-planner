@@ -4,6 +4,7 @@
   <link rel="icon" href="icone.png?v=m">
   <link rel="apple-touch-icon" href="icone.png?v=m">
   <meta name="theme-color" content="#090a13">
+  <link rel="manifest" href="manifest.webmanifest">
   <meta name="robots" content="noindex">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -302,6 +303,45 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
 .busy { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--grad); z-index: 90; animation: busy 1s ease-in-out infinite alternate; transform-origin: left; }
 @keyframes busy { from { transform: scaleX(.15); } to { transform: scaleX(.95); } }
 
+/* ---------- busca, calendário, botões segmentados ---------- */
+.busca-btn { color: var(--muted); border: 1px solid var(--line) !important; margin-bottom: 10px; }
+.busca-btn .kbd { margin-left: auto; font-size: 10px; padding: 2px 6px; border: 1px solid var(--line2); border-radius: 6px; color: var(--faint); }
+.mob-busca { position: absolute; right: 16px; top: 12px; background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); padding: 6px 8px; display: flex; }
+.mob-busca svg { width: 20px; height: 20px; }
+.busca-res { max-height: 60vh; overflow-y: auto; }
+.busca-res .li.sel { background: color-mix(in srgb, var(--a1) 12%, transparent); border-radius: var(--r-sm); }
+.busca-ic { display: flex; color: var(--a1); padding-left: 6px; }
+.busca-ic svg { width: 18px; height: 18px; }
+.card.destaque { border-color: var(--a1); box-shadow: 0 0 0 2px rgba(23, 216, 200, .35); }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: var(--r-sm); overflow: hidden; }
+.seg button { border: 0; background: none; color: var(--muted); padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.seg button.on { background: rgba(23, 216, 200, .14); color: var(--a1); }
+.cal-topo { margin-bottom: 10px; gap: 8px; }
+.cal-mes { margin: 0; min-width: 170px; text-align: center; }
+.cal-mes::first-letter { text-transform: uppercase; }
+.virar { display: inline-flex; transform: scaleX(-1); }
+.cal-leg { gap: 12px; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-dow { text-align: center; font-size: 12px; color: var(--faint); text-transform: uppercase; padding: 4px 0; }
+.cal-dia { min-height: 96px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-dia.vazio { background: none; border: 0; cursor: default; }
+.cal-dia:not(.vazio):hover { border-color: var(--line2); }
+.cal-dia.hoje { border-color: var(--a1); }
+.cal-dia.hoje .cal-num { color: var(--a1); font-weight: 800; }
+.cal-dia.sel { box-shadow: 0 0 0 2px rgba(31, 163, 230, .5); }
+.cal-num { font-size: 12px; color: var(--muted); }
+.cal-itens { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-item { font-size: 11px; line-height: 1.25; padding: 2px 6px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-item.festa { border: 1px solid; font-weight: 700; background: var(--surface2); }
+.cal-item.tarefa { color: var(--muted); background: var(--surface2); }
+.cal-item.tarefa.late { color: var(--danger); background: rgba(255, 90, 122, .1); }
+.cal-mais { font-size: 11px; color: var(--faint); padding-left: 4px; }
+.cal-pontos { display: none; gap: 3px; justify-content: center; margin-top: auto; }
+.cal-pontos i, .cal-leg i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.p-festa { background: var(--a1); }
+.p-tarefa { background: var(--warn); }
+.p-late { background: var(--danger); }
+
 /* ---------- celular ---------- */
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; }
@@ -327,6 +367,12 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
   .li.tarefa .t { flex-basis: calc(100% - 40px); }
   .li.tarefa select { margin-left: 31px; flex: 1; max-width: none !important; }
   .top .back { flex: none; }
+  .mob-head { position: relative; }
+  .cal-dia { min-height: 48px; padding: 4px; align-items: center; }
+  .cal-itens { display: none; }
+  .cal-pontos { display: flex; }
+  .cal-leg { display: none; }
+  .cal-mes { min-width: 0; font-size: 16px; }
 }
 @media (min-width: 861px) { .mob-head { display: none; } }
 </style>
@@ -359,6 +405,8 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
     }
     window.google = { script: { run: runner() } };
   })();
+  // app instalável (PWA): o service worker guarda a página para abrir rápido e sem internet
+  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
 </script>
   <script>
 (function () {
@@ -873,6 +921,7 @@ function render() {
   const main = h('main', { class: 'main' });
   const side = h('aside', { class: 'side' },
     h('img', { class: 'logo', src: window.MANY_LOGO, alt: 'Many' }),
+    h('button', { class: 'nav-btn busca-btn', onclick: abrirBusca, title: 'Buscar (Ctrl+K)' }, icon('busca'), 'Buscar', h('span', { class: 'kbd' }, 'Ctrl K')),
     NAV_GRUPOS.map((g, i) => [i ? h('div', { class: 'sep' }) : null,
       g.map(([v, t]) => h('button', { class: 'nav-btn' + (navAtiva(v) ? ' on' : ''), onclick: () => ir(v) }, icon(v), t))]),
     h('div', { class: 'me' },
@@ -885,7 +934,7 @@ function render() {
     h('button', { class: navMais().some(([v]) => navAtiva(v)) ? 'on' : '', onclick: menuMais }, icon('mais'), 'Mais'));
   app.innerHTML = '';
   app.appendChild(h('div', { class: 'shell' }, side,
-    h('div', {}, h('div', { class: 'mob-head' }, h('img', { src: window.MANY_LOGO, alt: 'Many' })), main)));
+    h('div', {}, h('div', { class: 'mob-head' }, h('img', { src: window.MANY_LOGO, alt: 'Many' }), h('button', { class: 'mob-busca', onclick: abrirBusca, 'aria-label': 'Buscar' }, icon('busca'))), main)));
   app.appendChild(mob);
   const view = VIEWS[S.rota.v] || VIEWS.inicio;
   try { add(main, [view()]); }
@@ -1135,8 +1184,13 @@ VIEWS.festas = function () {
   if (filtro === 'passadas') fs = fs.filter((f) => f.data < S.hoje || f.status === 'Realizada').reverse();
   const contagem = { proximas: festasOrdenadas().filter((f) => f.data >= S.hoje && f.status !== 'Realizada').length,
     passadas: festasOrdenadas().filter((f) => f.data < S.hoje || f.status === 'Realizada').length, todas: lista('festas').length };
+  const modo = S.rota.modo || modoFestasSalvo();
+  const trocaModo = h('div', { class: 'seg' }, [['lista', 'Lista'], ['calendario', 'Calendário']].map(([k, t]) =>
+    h('button', { class: k === modo ? 'on' : '', onclick: () => { try { localStorage.setItem('mp_modo_festas', k); } catch (e) { } ir('festas', Object.assign({}, S.rota, { modo: k })); } }, t)));
+  const acoesTopo = h('div', { class: 'row' }, trocaModo, btn('Nova festa', () => novaFesta(), 'primary', 'plus'));
+  if (modo === 'calendario') return h('div', {}, topo('Festas', acoesTopo), calendarioFestas());
   return h('div', {},
-    topo('Festas', btn('Nova festa', () => novaFesta(), 'primary', 'plus')),
+    topo('Festas', acoesTopo),
     abas([['proximas', 'Próximas', contagem.proximas], ['passadas', 'Passadas', contagem.passadas], ['todas', 'Todas', contagem.todas]], filtro, (k) => ir('festas', { filtro: k })),
     fs.length ? h('div', { class: 'grid' }, fs.map(cardFesta)) : vazio('Nenhuma festa aqui', null, btn('Nova festa', () => novaFesta(), 'primary', 'plus')));
 };
@@ -1175,7 +1229,7 @@ VIEWS.festa = function () {
   const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, escala: festaEscala, metricas: festaMetricas, historico: festaHistorico }[aba] || festaGeral;
   const rot = roteiroDa(f.id);
   return h('div', {},
-    topo(f.nome, stSel, () => ir('festas')),
+    topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stSel), () => ir('festas')),
     h('div', { class: 'row muted', style: { marginTop: '-10px', marginBottom: '16px' } }, h('span', {}, fmtDataLonga(f.data)), parHorario(f), tema ? h('span', { class: 'chip' }, tema.nome) : null),
     abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`], ['escala', 'Escala'], ['metricas', 'Métricas'], ['historico', 'Histórico']],
       aba, (k) => { S.rota.aba = k; render(); }),
@@ -2093,7 +2147,7 @@ function importarLink() {
 
 function cardMapa(m, acoes) {
   const plat = m.plataformas || [];
-  return h('div', { class: 'card mapa' },
+  return h('div', { class: 'card mapa' + (S.rota.destaque && S.rota.destaque === m.id ? ' destaque' : ''), 'data-mapa': m.id || null },
     h('div', { class: 'img', style: { backgroundImage: m.thumb ? `url("${m.thumb}")` : '' } },
       h('div', { class: 'badges' }, plat.includes('PC') ? h('span', { class: 'chip' }, 'PC') : null, plat.includes('Quest') ? h('span', { class: 'chip' }, 'Quest') : null,
         !plat.length ? h('span', { class: 'chip' }, 'plataforma ?') : null, m.capacidade ? h('span', { class: 'chip' }, `${m.capacidade} pessoas`) : null)),
@@ -2551,14 +2605,15 @@ function festaArtes(f) {
   const req = (ok, txt) => h('div', { class: 'row small' }, h('span', { class: 'chip ' + (ok ? 'st-Realizada' : 'st-Cancelada') }, ok ? 'ok' : 'falta'), txt);
   box.appendChild(h('div', { class: 'card' },
     h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Artes da festa'),
-      naFila.length ? btn('Verificar artes prontas', () => sincronizar(f), 'sm', 'restaurar') : null),
+      naFila.length ? h('span', { class: 'small muted row', style: { gap: '6px' } }, h('span', { class: 'spin' }), 'conferindo a fila…') : null),
     h('div', { class: 'stack', style: { gap: '6px', marginTop: '10px' } },
       req(liberaStatus, 'Festa Confirmada (status atual: ' + f.status + ')'),
       req(!!A.logo, 'Logo da festa enviado'),
       h('div', { class: 'row small' }, h('span', { class: 'chip ' + (A.fundos.principal ? 'st-Realizada' : '') }, A.fundos.principal ? 'ok' : 'Claude'),
         A.fundos.principal ? 'Fundo principal escolhido' : 'Sem fundo: o Claude desenha um no clima do tema (opcional)')),
     naFila.length ? h('div', { class: 'small soon', style: { marginTop: '10px' } },
-      `${naFila.length} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; depois clique em "Verificar artes prontas".`) : null));
+      `${naFila.length} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; o app confere sozinho quando esta aba é aberta.`) : null));
+  if (naFila.length) verificarSozinho(f);
 
   box.appendChild(secaoLogo(f, A));
   box.appendChild(secaoTextosArte(f, A));
@@ -2570,8 +2625,15 @@ function festaArtes(f) {
   return box;
 }
 
+// confere a fila de artes sem botão: no máximo a cada 2 min por festa (o render seguinte não dispara de novo)
+const ultimaVerificacao = {};
+function verificarSozinho(f) {
+  if (ultimaVerificacao[f.id] && Date.now() - ultimaVerificacao[f.id] < 120000) return;
+  ultimaVerificacao[f.id] = Date.now();
+  sincronizar(f, 'auto').catch(() => { });
+}
 async function sincronizar(f, silencioso) {
-  const r = await run('sincronizarArtes', { festaId: f.id });
+  const r = silencioso === 'auto' ? await api('sincronizarArtes', { festaId: f.id }) : await run('sincronizarArtes', { festaId: f.id });
   r.artes.forEach((x) => upsert('artes', x));
   r.pedidos.forEach((x) => upsert('pedidosArte', x));
   (r.temas || []).forEach((x) => upsert('temas', x));
@@ -2579,6 +2641,7 @@ async function sincronizar(f, silencioso) {
   (r.pedidosAnimacao || []).forEach((x) => upsert('pedidosAnimacao', x));
   const nv = (r.animacoes || []).length;
   const msg = [r.artes.length ? `${r.artes.length} arte(s) nova(s)` : '', nv ? `${nv} animação(ões) nova(s)` : ''].filter(Boolean).join(' e ');
+  if (silencioso === 'auto') { if (msg) { toast(msg + ' em ' + f.nome, 'ok'); renderSeguro(); } return; }
   if (!silencioso) toast(msg || 'Ainda não chegou nada da fila', msg ? 'ok' : '');
   render();
 }
@@ -2790,9 +2853,11 @@ VIEWS.artes = function () {
   if (filtro === 'proximas') fs = fs.filter((f) => f.data >= S.hoje);
   else fs = fs.filter((f) => f.data < S.hoje).reverse();
   const naFila = lista('pedidosArte').filter((p) => p.status === 'Na fila').length + lista('pedidosAnimacao').filter((p) => p.status === 'Na fila').length;
+  new Set(lista('pedidosArte').concat(lista('pedidosAnimacao')).filter((p) => p.status === 'Na fila').map((p) => p.festaId))
+    .forEach((id) => { const f = porId('festas', id); if (f) verificarSozinho(f); });
   return h('div', {},
     topo('Artes'),
-    naFila ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `${naFila} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; depois abra a festa e clique em "Verificar artes prontas".`) : null,
+    naFila ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `${naFila} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; o app confere sozinho e as artes prontas aparecem aqui.`) : null,
     abas([['proximas', 'Próximas festas'], ['passadas', 'Passadas']], filtro, (k) => ir('artes', { filtro: k })),
     fs.length ? h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' } }, fs.map(cardArtesFesta))
       : vazio('Nenhuma festa aqui', 'As artes de cada festa aparecem aqui assim que ela for criada.'));
@@ -3086,6 +3151,142 @@ function linksDados() {
     h('div', { class: 'card' }, h('h3', {}, 'Pasta do Drive'), h('p', { class: 'small muted' }, 'Artes dos DJs, referências dos temas e, na fase 3, as artes geradas de cada festa.'),
       h('a', { class: 'btn', href: S.links.pasta, target: '_blank' }, icon('ext'), 'Abrir pasta')));
 }
+
+// ---------- Busca rápida (Ctrl+K) ----------
+function semAcento(x) { return String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function resultadosBusca(q) {
+  q = semAcento(q).trim();
+  if (!q) return [];
+  const bate = (...campos) => campos.some((c) => semAcento(Array.isArray(c) ? c.join(' ') : c).includes(q));
+  const r = [];
+  festasOrdenadas().slice().reverse().forEach((f) => { if (bate(f.nome, fmtDM(f.data), (temaDe(f) || {}).nome)) r.push({ tipo: 'Festa', ic: 'festas', titulo: f.nome, sub: fmtData(f.data) + ' · ' + f.status, abrir: () => ir('festa', { id: f.id }) }); });
+  lista('djs').forEach((d) => { if (bate(d.nome, d.estilos, d.discord)) r.push({ tipo: 'DJ', ic: 'djs', titulo: d.nome, sub: (d.estilos || []).join(', '), abrir: () => ir('dj', { id: d.id }) }); });
+  lista('temas').forEach((t) => { if (bate(t.nome, t.tags, t.descricao)) r.push({ tipo: 'Tema', ic: 'temas', titulo: t.nome, sub: (t.tags || []).slice(0, 4).join(', '), abrir: () => { ir('temas', { aba: 'banco' }); editarTema(t, () => render()); } }); });
+  lista('mapas').forEach((m) => { if (bate(m.nome, m.autor, m.tags)) r.push({ tipo: 'Mapa', ic: 'mapas', titulo: m.nome, sub: (m.status || '') + (m.autor ? ' · por ' + m.autor : ''), abrir: () => irMapa(m) }); });
+  return r.slice(0, 30);
+}
+function irMapa(m) {
+  ir('mapas', { aba: 'banco', destaque: m.id });
+  setTimeout(() => { const el = document.querySelector('[data-mapa="' + m.id + '"]'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50);
+}
+function abrirBusca() {
+  if (document.querySelector('.overlay .busca-res')) return;
+  const q = inp({ placeholder: 'Festa, DJ, tema ou mapa…', autocomplete: 'off' });
+  const res = h('div', { class: 'list busca-res' });
+  let itens = [], atual = 0;
+  const abrirItem = (i) => { const it = itens[i]; if (!it) return; m.fechar(); it.abrir(); };
+  const desenhar = () => {
+    itens = resultadosBusca(q.value);
+    atual = Math.min(atual, Math.max(0, itens.length - 1));
+    res.innerHTML = '';
+    if (!q.value.trim()) { res.appendChild(h('div', { class: 'muted small' }, 'Digite para buscar. Enter abre o primeiro; as setas escolhem.')); return; }
+    if (!itens.length) { res.appendChild(h('div', { class: 'muted small' }, 'Nada encontrado.')); return; }
+    itens.forEach((it, i) => res.appendChild(h('div', { class: 'li click' + (i === atual ? ' sel' : ''), onclick: () => abrirItem(i) },
+      h('span', { class: 'busca-ic' }, icon(it.ic)), h('div', { class: 't' }, h('div', {}, it.titulo), h('div', { class: 's' }, it.tipo + (it.sub ? ' · ' + it.sub : ''))))));
+  };
+  q.addEventListener('input', () => { atual = 0; desenhar(); });
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); atual = Math.min(atual + 1, itens.length - 1); desenhar(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); atual = Math.max(atual - 1, 0); desenhar(); }
+    if (e.key === 'Enter') { e.preventDefault(); abrirItem(atual); }
+  });
+  const m = modal({ titulo: 'Buscar', corpo: h('div', { class: 'stack' }, q, res) });
+  desenhar();
+  setTimeout(() => q.focus(), 20);
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && S.me) { e.preventDefault(); abrirBusca(); }
+});
+
+// ---------- Duplicar festa (DJs, atividades e escala; a data é escolhida na hora) ----------
+function somarDias(iso, n) { return new Date(dt(iso).getTime() + n * 86400000).toISOString().slice(0, 10); }
+function duplicarFesta(f) {
+  const nome = inp({ value: f.nome });
+  const data = inp({ type: 'date' });
+  const horaI = inp({ type: 'time', value: f.horaBR || '' });
+  const ativs = lista('atividades').filter((a) => a.festaId === f.id), esc = lista('escala').filter((e) => e.festaId === f.id);
+  const m = modal({
+    titulo: 'Duplicar festa',
+    corpo: h('div', { class: 'stack' },
+      h('div', { class: 'hint' }, `Vem junto: ${(f.djIds || []).length} DJ(s), ${ativs.length} atividade(s) e a escala (${esc.length} pessoa(s)). Tema e mapa ficam vazios, o status volta para Ideia e o checklist é criado pela data nova.`),
+      campo('Nome', nome), h('div', { class: 'grid cols2' }, campoDataFesta(data), campo('Começa às (BR)', horaI))),
+    acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Duplicar', async () => {
+      if (!nome.value.trim() || !data.value) { toast('Preencha nome e data', 'err'); return; }
+      const dif = Math.round((dt(data.value) - dt(f.data)) / 86400000);
+      const nova = await salvar('festas', { nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: '', status: 'Ideia', djIds: (f.djIds || []).slice() });
+      for (const a of ativs) {
+        await salvar('atividades', { festaId: nova.id, tipoId: a.tipoId, titulo: a.titulo, regras: a.regras, premios: a.premios,
+          prazo: a.prazo ? somarDias(a.prazo, dif) : '', canal: a.canal, paginas: a.paginas });
+      }
+      for (const e of esc) await salvar('escala', { festaId: nova.id, funcaoId: e.funcaoId, pessoa: e.pessoa, obs: e.obs });
+      m.fechar(); toast('Festa duplicada', 'ok'); ir('festa', { id: nova.id });
+    }, 'primary')]
+  });
+}
+
+// ---------- Calendário das festas (festas + prazos de tarefas) ----------
+function modoFestasSalvo() { try { return localStorage.getItem('mp_modo_festas') || 'lista'; } catch (e) { return 'lista'; } }
+function calendarioFestas() {
+  const mes = S.rota.mes || S.hoje.slice(0, 7);
+  const [y, mo] = mes.split('-').map(Number);
+  const mudarMes = (d) => { const x = new Date(Date.UTC(y, mo - 1 + d, 1)); ir('festas', Object.assign({}, S.rota, { mes: x.toISOString().slice(0, 7), dia: null })); };
+  const iso = (d) => new Date(Date.UTC(y, mo - 1, d)).toISOString().slice(0, 10);
+  const primeiro = new Date(Date.UTC(y, mo - 1, 1)).getUTCDay(), nDias = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const festas = lista('festas').filter((f) => f.data && f.data.startsWith(mes));
+  const ativas = new Set(lista('festas').filter((f) => f.status !== 'Cancelada').map((f) => f.id));
+  const tarefas = tarefasTodas().filter((t) => !t.feita && t.prazo && t.prazo.startsWith(mes) && ativas.has(t.festaId));
+  const doDia = (k) => festas.filter((f) => f.data === k).map((f) => ({ festa: f }))
+    .concat(tarefas.filter((t) => t.prazo === k).map((t) => ({ tarefa: t })));
+  const item = (x) => x.festa
+    ? h('div', { class: 'cal-item festa st-' + x.festa.status, title: x.festa.nome + ' (' + x.festa.status + ')', onclick: (e) => { e.stopPropagation(); ir('festa', { id: x.festa.id }); } }, x.festa.nome)
+    : h('div', { class: 'cal-item tarefa' + (x.tarefa.prazo < S.hoje ? ' late' : ''), title: x.tarefa.titulo, onclick: (e) => { e.stopPropagation(); ir('festa', { id: x.tarefa.festaId, aba: 'checklist' }); } }, x.tarefa.titulo);
+  const grade = h('div', { class: 'cal' }, DIAS.map((d) => h('div', { class: 'cal-dow' }, d)));
+  for (let i = 0; i < primeiro; i++) grade.appendChild(h('div', { class: 'cal-dia vazio' }));
+  for (let d = 1; d <= nDias; d++) {
+    const k = iso(d), its = doDia(k);
+    const temFesta = its.some((x) => x.festa), temTarefa = its.some((x) => x.tarefa), atrasada = its.some((x) => x.tarefa && x.tarefa.prazo < S.hoje);
+    grade.appendChild(h('div', { class: 'cal-dia' + (k === S.hoje ? ' hoje' : '') + (k === S.rota.dia ? ' sel' : ''), onclick: () => ir('festas', Object.assign({}, S.rota, { dia: k })) },
+      h('div', { class: 'cal-num' }, d),
+      h('div', { class: 'cal-itens' }, its.slice(0, 3).map(item), its.length > 3 ? h('div', { class: 'cal-mais' }, '+' + (its.length - 3)) : null),
+      its.length ? h('div', { class: 'cal-pontos' }, temFesta ? h('i', { class: 'p-festa' }) : null, temTarefa ? h('i', { class: atrasada ? 'p-late' : 'p-tarefa' }) : null) : null));
+  }
+  const diaSel = S.rota.dia && S.rota.dia.startsWith(mes) ? S.rota.dia : null;
+  let detalhe = null;
+  if (diaSel) {
+    const its = doDia(diaSel);
+    detalhe = h('div', { class: 'card', style: { marginTop: '12px' } }, h('h3', { style: { marginTop: 0 } }, fmtDataLonga(diaSel)),
+      its.length ? h('div', { class: 'list' }, its.map((x) => x.festa
+        ? h('div', { class: 'li click', onclick: () => ir('festa', { id: x.festa.id }) }, h('span', { class: 'busca-ic' }, icon('festas')), h('div', { class: 't' }, h('b', {}, x.festa.nome), h('div', { class: 's' }, x.festa.status)))
+        : linhaTarefa(x.tarefa, true))) : h('div', { class: 'muted' }, 'Nada neste dia.'));
+  }
+  return h('div', {},
+    h('div', { class: 'row cal-topo' },
+      h('button', { class: 'btn ghost sm', onclick: () => mudarMes(-1), 'aria-label': 'Mês anterior' }, icon('voltar')),
+      h('h3', { class: 'cal-mes' }, MESES_L[mo - 1] + ' de ' + y),
+      h('button', { class: 'btn ghost sm', onclick: () => mudarMes(1), 'aria-label': 'Próximo mês' }, h('span', { class: 'virar' }, icon('voltar'))),
+      mes !== S.hoje.slice(0, 7) ? btn('Hoje', () => ir('festas', Object.assign({}, S.rota, { mes: null, dia: null })), 'sm') : null,
+      h('span', { class: 'grow' }),
+      h('span', { class: 'small muted row cal-leg' }, h('span', {}, h('i', { class: 'p-festa' }), ' festa'), h('span', {}, h('i', { class: 'p-tarefa' }), ' prazo'), h('span', {}, h('i', { class: 'p-late' }), ' atrasada'))),
+    grade, detalhe);
+}
+
+// ---------- Atualização automática (ao voltar para a aba e a cada 5 min com ela aberta) ----------
+let ultimaCarga = Date.now(), carregando = false;
+async function atualizarDados() {
+  if (carregando || !S.me || salvandoN || !sessao()) return;
+  carregando = true; ultimaCarga = Date.now();
+  opsDesdeCarga = [];
+  try {
+    const b = await api('bootstrap');
+    const antes = JSON.stringify(S.dados);
+    Object.assign(S, { me: b.me, dados: b.dados, hoje: b.hoje, consts: b.consts, links: b.links, ia: b.ia, artesConsts: b.artesConsts });
+    opsDesdeCarga.forEach(([t, o]) => upsert(t, o));
+    guardarDadosDepois();
+    if (JSON.stringify(S.dados) !== antes && !document.querySelector('.overlay')) renderSeguro();
+  } catch (e) { } finally { opsDesdeCarga = null; carregando = false; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 30000) atualizarDados(); });
+setInterval(() => { if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 290000) atualizarDados(); }, 60000);
 
 // ---------- Lixeira e histórico ----------
 // lista vinda do servidor: mostra na hora a última resposta guardada e troca quando a nova chegar
