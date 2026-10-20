@@ -820,21 +820,39 @@ function thumbDbGet(id) {
 function thumbDbPut(id, v) {
   abrirThumbDb().then((db) => { try { if (db && v) db.transaction('m', 'readwrite').objectStore('m').put(v, id); } catch (e) { } });
 }
-function pedirLoteThumbs() {
-  const ids = thumbLote.splice(0);
-  for (let i = 0; i < ids.length; i += 4) {
-    const parte = ids.slice(i, i + 4);
-    api('miniaturas', { fileIds: parte }).then((r) => parte.forEach((id) => {
-      const u = r[id] || null;
-      thumbCache[id] = u; thumbDbPut(id, u);
-      (thumbEspera[id] || []).forEach((f) => f(u)); delete thumbEspera[id];
-    })).catch(() => parte.forEach((id) => { thumbCache[id] = null; delete thumbEspera[id]; }));
+// lotes de 4 miniaturas, no máximo 4 chamadas ao mesmo tempo; o que a tela pede passa na frente da pré-carga
+const filaLotes = [];
+let lotesAtivos = 0;
+function entregarThumb(id, u) {
+  thumbCache[id] = u; thumbDbPut(id, u);
+  (thumbEspera[id] || []).forEach((f) => f(u)); delete thumbEspera[id];
+}
+function rodarLotes() {
+  while (lotesAtivos < 4 && filaLotes.length) {
+    const parte = filaLotes.shift();
+    lotesAtivos++;
+    api('miniaturas', { fileIds: parte }).then((r) => parte.forEach((id) => entregarThumb(id, r[id] || null)))
+      .catch(() => parte.forEach((id) => { thumbCache[id] = null; delete thumbEspera[id]; }))
+      .finally(() => { lotesAtivos--; rodarLotes(); });
   }
 }
+function enfileirarThumbs(ids, naFrente) {
+  const lotes = [];
+  for (let i = 0; i < ids.length; i += 4) lotes.push(ids.slice(i, i + 4));
+  if (naFrente) filaLotes.unshift(...lotes); else filaLotes.push(...lotes);
+  rodarLotes();
+}
+function pedirLoteThumbs() { enfileirarThumbs(thumbLote.splice(0), true); }
 function miniatura(fileId, aplicar) {
   if (!fileId) return;
   if (thumbCache[fileId] !== undefined) { aplicar(thumbCache[fileId]); return; }
-  if (thumbEspera[fileId]) { thumbEspera[fileId].push(aplicar); return; }
+  if (thumbEspera[fileId]) {
+    thumbEspera[fileId].push(aplicar);
+    // estava só na pré-carga, esperando a vez: a tela precisa agora, então o lote vai para a frente
+    const i = filaLotes.findIndex((l) => l.includes(fileId));
+    if (i > 0) filaLotes.unshift(filaLotes.splice(i, 1)[0]);
+    return;
+  }
   thumbEspera[fileId] = [aplicar];
   thumbDbGet(fileId).then((v) => {
     if (v) { thumbCache[fileId] = v; (thumbEspera[fileId] || []).forEach((f) => f(v)); delete thumbEspera[fileId]; return; }
@@ -842,6 +860,33 @@ function miniatura(fileId, aplicar) {
     clearTimeout(tThumb); tThumb = setTimeout(pedirLoteThumbs, 20);
   });
 }
+// Pré-carga: depois de abrir, baixa por trás as imagens principais (logos das festas, DJs, artes e fundos das próximas festas)
+// e guarda no navegador; nas próximas vezes elas já aparecem na hora.
+function idsParaPreCarregar() {
+  const ids = [], add_ = (x) => { if (x && x.fileId) ids.push(x.fileId); };
+  const fs = festasOrdenadas(), prox = fs.filter((f) => f.data >= S.hoje && f.status !== 'Cancelada'), outras = fs.filter((f) => !prox.includes(f)).reverse();
+  prox.concat(outras).forEach((f) => add_(arteDe(f).logo));
+  lista('djs').forEach((d) => { const a = d.artes || []; add_(a.find((x) => x.tipo === 'logo') || a.find((x) => x.tipo === 'foto') || a[0]); });
+  prox.forEach((f) => {
+    const A = arteDe(f);
+    Object.values(A.fundos).forEach(add_);
+    const arts = artesDa(f.id);
+    [...new Set(arts.map((x) => x.nome))].forEach((n) => add_(arts.filter((x) => x.nome === n).sort((a, b) => b.versao - a.versao)[0]));
+  });
+  lista('djs').forEach((d) => (d.artes || []).forEach(add_));
+  return [...new Set(ids)];
+}
+async function preCarregarImagens() {
+  const db = await abrirThumbDb();
+  const salvas = await new Promise((res) => {
+    if (!db) return res(new Set());
+    try { const q = db.transaction('m').objectStore('m').getAllKeys(); q.onsuccess = () => res(new Set(q.result)); q.onerror = () => res(new Set()); } catch (e) { res(new Set()); }
+  });
+  const faltam = idsParaPreCarregar().filter((id) => !salvas.has(id) && thumbCache[id] === undefined && !thumbEspera[id]);
+  faltam.forEach((id) => { thumbEspera[id] = []; });
+  enfileirarThumbs(faltam, false);
+}
+function agendarPreCarga() { setTimeout(() => { preCarregarImagens().catch(() => { }); }, 1500); }
 function thumbDrive(fileId, cls, label) {
   const el = h('div', { class: 'thumb ' + (cls || '') }, label ? h('span', { class: 'lbl' }, label) : null);
   // no xadrez (PNG transparente) a imagem vai num <img> por cima, para não brigar com o padrão do fundo
@@ -3297,6 +3342,7 @@ async function atualizarDados() {
     opsDesdeCarga.forEach(([t, o]) => upsert(t, o));
     guardarDadosDepois();
     if (JSON.stringify(S.dados) !== antes && !document.querySelector('.overlay')) renderSeguro();
+    agendarPreCarga();
   } catch (e) { } finally { opsDesdeCarga = null; carregando = false; }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 30000) atualizarDados(); });
@@ -3427,6 +3473,7 @@ async function iniciar() {
     // só no preview local
     if (window.MP_ROTA_INICIAL) S.rota = window.MP_ROTA_INICIAL(S);
     if (guardado) renderSeguro(); else render();
+    agendarPreCarga();
   } catch (e) {
     opsDesdeCarga = null;
     if (guardado && !e.semSessao) { toast('Sem conexão com o servidor: mostrando os dados da última visita', 'err'); return; }
