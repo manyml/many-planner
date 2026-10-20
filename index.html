@@ -300,6 +300,20 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
 .loading { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 40px; color: var(--muted); }
 .splash { min-height: 100vh; display: grid; place-items: center; text-align: center; padding: 24px; }
 .splash img { width: 220px; }
+.logo-anim { position: relative; width: 220px; animation: logo-entra .9s cubic-bezier(.22, 1, .36, 1) both, logo-respira 2.6s ease-in-out .9s infinite; }
+.logo-anim img { display: block; width: 100%; }
+.logo-brilho { position: absolute; inset: 0; pointer-events: none; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .85) 50%, transparent 62%); background-size: 260% 100%; animation: logo-brilho 2.2s ease-in-out .5s infinite; }
+.splash.carregando .loading { padding-top: 18px; animation: logo-texto 1.6s ease-in-out infinite; }
+@keyframes logo-entra { from { opacity: 0; scale: .7; filter: blur(10px); } to { opacity: 1; scale: 1; filter: blur(0); } }
+@keyframes logo-respira {
+  0%, 100% { scale: 1; filter: drop-shadow(0 4px 18px rgba(23, 216, 200, .35)); }
+  33% { filter: drop-shadow(0 6px 26px rgba(31, 163, 230, .55)); }
+  50% { scale: 1.045; }
+  66% { filter: drop-shadow(0 6px 30px rgba(75, 59, 216, .6)); } }
+@keyframes logo-brilho { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes logo-texto { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .logo-anim, .logo-brilho, .splash.carregando .loading { animation: none; } }
 .busy { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--grad); z-index: 90; animation: busy 1s ease-in-out infinite alternate; transform-origin: left; }
 @keyframes busy { from { transform: scaleX(.15); } to { transform: scaleX(.95); } }
 
@@ -3324,10 +3338,16 @@ VIEWS.historico = function () {
 // Início do app
 // =====================================================================
 
-function splash(conteudo) {
+// carregando = logo animado (respira, brilho passando por dentro do desenho e luz nas cores do Many)
+function splash(conteudo, carregando) {
   app.innerHTML = '';
-  app.appendChild(h('div', { class: 'splash' }, h('div', { class: 'stack', style: { alignItems: 'center', maxWidth: '460px' } },
-    h('img', { src: window.MANY_LOGO, alt: 'Many' }), conteudo)));
+  const mascara = 'url("' + window.MANY_LOGO + '")';
+  const logo = carregando
+    ? h('div', { class: 'logo-anim' }, h('img', { src: window.MANY_LOGO, alt: 'Many' }),
+      h('span', { class: 'logo-brilho', style: { maskImage: mascara, webkitMaskImage: mascara } }))
+    : h('img', { src: window.MANY_LOGO, alt: 'Many' });
+  app.appendChild(h('div', { class: 'splash' + (carregando ? ' carregando' : '') }, h('div', { class: 'stack', style: { alignItems: 'center', maxWidth: '460px' } },
+    logo, conteudo)));
 }
 
 // Mostra erros de JavaScript na própria tela (ajuda a diagnosticar quando algo trava)
@@ -3396,7 +3416,7 @@ async function iniciar() {
   if (guardado) {
     Object.assign(S, { me: guardado.me, dados: guardado.dados, hoje: guardado.hoje, consts: guardado.consts, links: guardado.links, ia: guardado.ia, artesConsts: guardado.artesConsts });
     render();
-  } else splash(h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Carregando o Many Planner…'));
+  } else splash(h('div', { class: 'loading' }, 'Carregando o Many Planner…'), true);
   opsDesdeCarga = [];
   try {
     const b = await comPrazo(api('bootstrap'), 45000);
