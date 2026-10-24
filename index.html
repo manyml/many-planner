@@ -1568,8 +1568,9 @@ function painelVrcx(v) {
   const MOSTRAR = S.vrcxTodos ? vis.length : 20;
   return h('div', { class: 'stack' },
     h('div', { class: 'small muted' }, `${inst.length > 1 ? inst.map((x) => `${x.mundo} (${x.unicos})`).join(' + ') : v.mundo} · ${horaBR(v.inicio)} às ${horaBR(v.fim)}`),
+    v.parcial ? h('div', { class: 'hint' }, 'Noite que o VRCX não gravou, registrada pelo ' + v.parcial + '. Por isso não tem pico, tempo médio nem gráfico de lotação.') : null,
     h('div', { class: 'vrcx-stats' },
-      stat(v.unicos, 'pessoas únicas'), stat(v.pico, `pico às ${horaBR(v.picoEm)}`), stat(fmtMin(v.tempoMedioMin || 0), 'tempo médio'),
+      stat(v.unicos, 'pessoas únicas'), v.parcial ? null : stat(v.pico, `pico às ${horaBR(v.picoEm)}`), v.parcial ? null : stat(fmtMin(v.tempoMedioMin || 0), 'tempo médio'),
       stat(v.novos, '1ª vez numa festa'), stat(v.recorrentes, 'já tinham vindo')),
     graficoLotacao(v.serie || []),
     h('div', { class: 'section-title' }, 'Frequentadores'),
@@ -1578,7 +1579,7 @@ function painelVrcx(v) {
     h('div', { class: 'list' }, vis.slice(0, MOSTRAR).map((p) => h('div', { class: 'li' },
       h('div', { class: 't' }, h('div', {}, p.nome, p.novo ? h('span', { class: 'chip st-Ideia', style: { marginLeft: '8px' } }, '1ª vez') : null),
         h('div', { class: 's' }, p.vezes > 1 ? `${p.vezes}ª festa do Many` : 'primeira festa do Many')),
-      h('span', { class: 'small muted' }, fmtMin(p.minutos))))),
+      v.parcial ? null : h('span', { class: 'small muted' }, fmtMin(p.minutos))))),
     vis.length > MOSTRAR ? h('div', { class: 'row', style: { justifyContent: 'center' } }, btn(`Ver todos (${vis.length})`, () => { S.vrcxTodos = true; render(); }, 'ghost sm')) : null);
 }
 
@@ -1688,7 +1689,7 @@ const COLS_NOITE = [
   { k: 'noite', t: 'Festa', ic: 'festas', v: (n) => n.noite },
   { k: 'unicos', t: 'Pessoas', ic: 'equipe', v: (n) => n.unicos },
   { k: 'pico', t: 'Pico', ic: 'pico', v: (n) => n.pico },
-  { k: 'tempo', t: 'Tempo médio', ic: 'relogio', v: (n) => n.tempoMedioMin || 0 },
+  { k: 'tempo', t: 'Tempo médio', ic: 'relogio', v: (n) => (n.parcial ? null : n.tempoMedioMin || 0) },
   { k: 'novos', t: '1ª vez', ic: 'novo', v: (n) => n.novos },
   { k: 'insta', t: 'Insta', ic: 'insta', v: (n) => seguidoresDe(n) }
 ];
@@ -1710,6 +1711,7 @@ function tabelaNoites(noites) {
     h('span', { class: 'th-in' }, icon(c.ic), c.t, h('span', { class: 'seta' }, o.k === c.k ? (o.dir > 0 ? '▲' : '▼') : '↕')));
   const cel = (c, n, txt) => {
     const v = c.v(n);
+    if (v === null && c.k !== 'insta') return h('td', { class: 'num' }, h('span', { class: 'faint', title: 'Noite registrada sem esse dado' }, '—'));
     if (v === null) return h('td', { class: 'num' }, h('a', { href: '#', class: 'anotar', onclick: (e) => { e.preventDefault(); e.stopPropagation(); renomearNoite(n); } }, '+ anotar'));
     return h('td', { class: 'num' + (c.k === 'insta' ? ' insta' : '') }, h('b', {}, txt),
       h('span', { class: 'mini-barra' }, h('i', { style: { width: Math.round((v / max[c.k]) * 100) + '%' } })));
@@ -1772,7 +1774,7 @@ function graficoFestas(noites) {
   dicaGrafico(box, noites.length, (i) => {
     const n = noites[i], s = segs[i];
     const ant = segs.slice(0, i).filter((x) => x !== null).pop();
-    return [nomeNoite(n), `${fmtNoite(n.noite)} · ${n.unicos} pessoas no VRChat · pico ${n.pico}`,
+    return [nomeNoite(n), `${fmtNoite(n.noite)} · ${n.unicos} pessoas no VRChat · pico ${n.pico ?? '—'}`,
       s !== null ? `${fmtNum(s)} seguidores no Insta${ant !== undefined ? ` (${s - ant >= 0 ? '+' : ''}${fmtNum(s - ant)} desde a anterior)` : ''}` : 'seguidores no Insta: não anotado'];
   }, (i) => ir('metricas', { noite: noites[i].noite }));
   const wrap = h('div', {}, box);
