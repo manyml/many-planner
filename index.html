@@ -169,6 +169,22 @@ img { max-width: 100%; }
 .st-Testando { color: #ffd36b; border-color: #7a5f1c; }
 .st-Aprovado { color: var(--ok); border-color: #1d6b45; }
 .st-Reprovado { color: var(--danger); border-color: #7a2438; }
+.esc-lista { display: flex; flex-direction: column; }
+.esc-linha { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.esc-linha:first-child { border-top: 0; }
+.esc-funcao { font-size: 13px; color: var(--muted); }
+.esc-pessoas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.esc-pessoa { display: inline-flex; align-items: center; border-radius: 99px; background: var(--surface2, rgba(255,255,255,.05)); }
+.esc-nome { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 3px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.esc-nome small { color: var(--muted); font-size: 11px; }
+.esc-x { display: grid; place-items: center; width: 22px; height: 22px; margin-right: 2px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--faint); cursor: pointer; }
+.esc-x svg { width: 12px; height: 12px; }
+.esc-x:hover { color: var(--danger); }
+.esc-add { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--line); color: var(--faint); }
+.esc-add:hover { color: var(--a1); border-color: var(--a1); }
+.esc-add svg { width: 14px; height: 14px; }
+.esc-add select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
+@media (max-width: 560px) { .esc-linha { grid-template-columns: 1fr; gap: 6px; } }
 .tabs-linha { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tabs-linha .tabs { flex: 1; min-width: 0; border-bottom: 0; margin-bottom: 0; }
 .aba-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--faint); cursor: pointer; transition: color .15s; }
@@ -1301,13 +1317,13 @@ VIEWS.festa = function () {
   const pr = progresso(f.id), tema = temaDe(f);
   const nAtiv = lista('atividades').filter((a) => a.festaId === f.id).length;
   const stSel = sel(S.consts.statusFesta, f.status, { style: { width: 'auto' }, onchange: async () => { await salvar('festas', { id: f.id, status: stSel.value }); render(); } });
-  const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, escala: festaEscala, historico: festaHistorico }[aba] || festaGeral;
+  const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, historico: festaHistorico }[aba] || festaGeral;
   const rot = roteiroDa(f.id);
   return h('div', {},
     topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stSel), () => ir('festas')),
     h('div', { class: 'row muted', style: { marginTop: '-10px', marginBottom: '16px' } }, h('span', {}, fmtDataLonga(f.data)), parHorario(f), tema ? h('span', { class: 'chip' }, tema.nome) : null),
     h('div', { class: 'tabs-linha' },
-      abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`], ['escala', 'Escala']],
+      abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`]],
         aba, (k) => { S.rota.aba = k; render(); }),
       h('button', { class: 'aba-ic' + (aba === 'historico' ? ' on' : ''), title: 'Histórico', 'aria-label': 'Histórico', onclick: () => { S.rota.aba = aba === 'historico' ? 'geral' : 'historico'; render(); } }, icon('historico'))),
     corpo(f));
@@ -1371,6 +1387,7 @@ function festaGeral(f) {
         mapaAtual ? h('div', { class: 'row small', style: { marginTop: '6px' } }, chipStatus(mapaAtual.status), mapaAtual.capacidade ? `cap. ${mapaAtual.capacidade}` : null,
           h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null),
       campo('Notas internas', notas, { full: true }))),
+    blocoEscala(f),
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
 
@@ -1506,25 +1523,35 @@ function editarTarefa(t) {
   });
 }
 
-function festaEscala(f) {
-  const escala = lista('escala').filter((e) => e.festaId === f.id);
-  const equipe = lista('equipe').filter((p) => p.ativo !== false);
-  const funcoes = lista('funcoes').slice().sort((a, b) => a.nome.localeCompare(b.nome));
-  if (!funcoes.length) return vazio('Nenhuma função cadastrada', 'Cadastre funções em Equipe e ajustes.', btn('Abrir ajustes', () => ir('equipe', { aba: 'funcoes' })));
-  return h('div', { class: 'stack' },
-    h('div', { class: 'grid cols2' }, funcoes.map((fn) => {
+// escala da festa (fica na aba Geral): redesenha só o próprio cartão para não perder o que está sendo digitado no formulário
+function blocoEscala(f) {
+  const box = h('div', { class: 'card' });
+  const editarObs = (e) => {
+    const obs = inp({ value: e.obs || '', placeholder: 'Ex.: 21h–23h' });
+    const m = modal({
+      titulo: nomePessoa(e.pessoa), corpo: campo('Observação', obs),
+      acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Salvar', async () => { await salvar('escala', { id: e.id, obs: obs.value.trim() }); m.fechar(); desenhar(); }, 'primary')]
+    });
+  };
+  const pessoaEl = (e) => h('span', { class: 'esc-pessoa' },
+    h('button', { type: 'button', class: 'esc-nome', title: 'Editar observação', onclick: () => editarObs(e) }, avatar(e.pessoa, 22), nomePessoa(e.pessoa), e.obs ? h('small', {}, e.obs) : null),
+    h('button', { type: 'button', class: 'esc-x', 'aria-label': 'Tirar da escala', onclick: async () => { await run('excluir', { tabela: 'escala', id: e.id }); tirar('escala', e.id); desenhar(); } }, icon('x')));
+  const desenhar = () => {
+    const escala = lista('escala').filter((e) => e.festaId === f.id);
+    const equipe = lista('equipe').filter((p) => p.ativo !== false);
+    const funcoes = lista('funcoes').slice().sort((a, b) => a.nome.localeCompare(b.nome));
+    box.replaceChildren(h('h3', {}, 'Escala'), funcoes.length ? h('div', { class: 'esc-lista' }, funcoes.map((fn) => {
       const pessoas = escala.filter((e) => e.funcaoId === fn.id);
-      const obs = inp({ placeholder: 'obs. (ex.: 21h–23h)' });
-      const pessoa = sel([['', 'escolher pessoa…']].concat(equipe.filter((p) => !pessoas.some((x) => x.pessoa === p.email)).map((p) => [p.email, p.nome])), '');
-      return h('div', { class: 'card' }, h('h3', {}, fn.nome), fn.descricao ? h('div', { class: 'small muted', style: { marginTop: '-8px', marginBottom: '10px' } }, fn.descricao) : null,
-        pessoas.length ? h('div', { class: 'list' }, pessoas.map((e) => h('div', { class: 'li' },
-          avatar(e.pessoa, 34),
-          h('div', { class: 't' }, h('div', {}, nomePessoa(e.pessoa)), e.obs ? h('div', { class: 's' }, e.obs) : null),
-          btn('', async () => { await run('excluir', { tabela: 'escala', id: e.id }); tirar('escala', e.id); render(); }, 'ghost sm', 'x')))) : h('div', { class: 'small muted' }, 'Ninguém escalado'),
-        h('div', { class: 'row', style: { marginTop: '10px' } }, h('div', { class: 'grow' }, pessoa), h('div', { class: 'grow' }, obs),
-          btn('', async () => { if (!pessoa.value) return; await salvar('escala', { festaId: f.id, funcaoId: fn.id, pessoa: pessoa.value, obs: obs.value.trim() }); render(); }, 'sm', 'plus')));
-    })),
-    h('div', { class: 'hint' }, 'Funções novas: Equipe e ajustes → Funções.'));
+      const livres = equipe.filter((p) => !pessoas.some((x) => x.pessoa === p.email));
+      const add = sel([['', 'Adicionar pessoa']].concat(livres.map((p) => [p.email, p.nome])), '', {
+        'aria-label': 'Adicionar pessoa em ' + fn.nome,
+        onchange: async () => { await salvar('escala', { festaId: f.id, funcaoId: fn.id, pessoa: add.value, obs: '' }); desenhar(); } });
+      return h('div', { class: 'esc-linha' }, h('span', { class: 'esc-funcao', title: fn.descricao || null }, fn.nome),
+        h('div', { class: 'esc-pessoas' }, pessoas.map(pessoaEl), livres.length ? h('span', { class: 'esc-add' }, icon('plus'), add) : null));
+    })) : h('div', { class: 'small muted' }, 'Nenhuma função cadastrada. Cadastre em Equipe e ajustes → Funções.'));
+  };
+  desenhar();
+  return box;
 }
 
 // ---------- métricas do VRCX (geradas no PC por vrcx/metricas.mjs) ----------
