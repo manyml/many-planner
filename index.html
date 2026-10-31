@@ -193,6 +193,7 @@ img { max-width: 100%; }
 .detalhes summary b { font-weight: 600; }
 .det-resumo { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); }
 .detalhes .form { margin-top: 14px; }
+.atalhos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .tabs-linha { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tabs-linha .tabs { flex: 1; min-width: 0; border-bottom: 0; margin-bottom: 0; }
 .aba-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--faint); cursor: pointer; transition: color .15s; }
@@ -1199,15 +1200,14 @@ VIEWS.inicio = function () {
       h('div', { style: { marginTop: '16px' } },
         h('div', { class: 'row small muted', style: { marginBottom: '6px' } }, h('span', { class: 'grow' }, 'Checklist'), `${pr.feitas}/${pr.total}`),
         barraChecklist(prox.id, { grande: true, legenda: true }))));
+    wrap.appendChild(h('div', { class: 'atalhos' }, [['atividades', 'Atividades', 'raio'], ['artes', 'Artes', 'artes'], ['checklist', 'Checklist', 'check']].map(([aba, txt, ic]) =>
+      btn(txt, () => ir('festa', { id: prox.id, aba }), '', ic))));
   } else {
     wrap.appendChild(vazio('Nenhuma festa marcada', 'Comece pelas sugestões de tema ou crie a próxima festa.', btn('Ver sugestões de tema', () => ir('temas'), 'primary')));
   }
 
   const minhas = tarefasTodas().filter((t) => !t.feita && t.responsavel === S.me.email && festaAtiva(t.festaId))
     .sort((a, b) => ((a.prazo || '9') < (b.prazo || '9') ? -1 : 1));
-  const atrasadas = tarefasTodas().filter((t) => !t.feita && t.prazo && t.prazo < S.hoje && festaAtiva(t.festaId))
-    .sort((a, b) => (a.prazo < b.prazo ? -1 : 1));
-  const semDono = prox ? tarefasDa(prox.id).filter((t) => !t.feita && !t.responsavel && t.prazo && diasAte(t.prazo) <= 7) : [];
 
   const grid = h('div', { class: 'grid cols2' });
   if (prox) {
@@ -1219,21 +1219,6 @@ VIEWS.inicio = function () {
   }
   grid.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Minhas tarefas'),
     minhas.length ? h('div', { class: 'list' }, minhas.slice(0, 8).map((t) => linhaTarefa(t, true))) : h('div', { class: 'muted small' }, 'Nada atribuído a você agora.')));
-  grid.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Atrasadas da equipe'),
-    atrasadas.length ? h('div', { class: 'list' }, atrasadas.slice(0, 8).map((t) => linhaTarefa(t, true))) : h('div', { class: 'muted small' }, 'Nenhuma tarefa atrasada.')));
-  if (semDono.length) {
-    grid.appendChild(h('div', { class: 'card' }, h('h3', {}, 'Sem responsável (próximos 7 dias)'),
-      h('div', { class: 'list' }, semDono.map((t) => linhaTarefa(t, true)))));
-  }
-  const datasCard = h('div', { class: 'card' }, h('h3', {}, 'Próximas datas temáticas'), h('div', { class: 'loading' }, h('span', { class: 'spin' })));
-  grid.appendChild(datasCard);
-  carregarSugestoes().then((s) => {
-    const body = datasCard.querySelector('.loading');
-    if (!body) return;
-    body.replaceWith(h('div', { class: 'list' }, s.datas.slice(0, 5).map((d) => h('div', { class: 'li' },
-      h('div', { class: 't' }, h('div', {}, d.nome), h('div', { class: 's' }, `${fmtData(d.data)} · ${emDias(d.faltam)} · ${d.regiao}`)),
-      btn('Ver', () => ir('temas', { aba: 'sugestoes' }), 'sm ghost')))));
-  }).catch(() => { const b = datasCard.querySelector('.loading'); if (b) b.replaceWith(h('div', { class: 'muted small' }, 'Não foi possível carregar.')); });
   wrap.appendChild(grid);
   return wrap;
 };
