@@ -193,6 +193,18 @@ img { max-width: 100%; }
 .detalhes summary b { font-weight: 600; }
 .det-resumo { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); }
 .detalhes .form { margin-top: 14px; }
+.opcoes { display: flex; flex-direction: column; gap: 10px; }
+.opcoes-temas { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; }
+.opcao { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.opcao:hover:not(:disabled) { border-color: var(--a1); }
+.opcao:disabled { opacity: .5; cursor: default; }
+.opcao-ic { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 10px; color: var(--a1); background: rgba(23, 216, 200, .12); }
+.opcao-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { font-size: 13px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.opcao-cores { display: flex; gap: 3px; flex: none; }
+.opcao-cores i { width: 12px; height: 12px; border-radius: 50%; }
+.opcao-voltar { align-self: flex-start; }
 .atalhos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .tabs-linha { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tabs-linha .tabs { flex: 1; min-width: 0; border-bottom: 0; margin-bottom: 0; }
@@ -960,10 +972,16 @@ function lerBase64(file) {
     r.readAsDataURL(file);
   });
 }
-async function enviar(alvo, id, tipo) {
+async function escolherImagem() {
   const f = await escolherArquivo(TIPO_IMAGEM);
-  if (!f) return null;
-  if (f.size > 10 * 1024 * 1024) { toast('Arquivo maior que 10 MB', 'err'); return null; }
+  if (f && f.size > 10 * 1024 * 1024) { toast('Arquivo maior que 10 MB', 'err'); return null; }
+  return f;
+}
+async function enviar(alvo, id, tipo) {
+  const f = await escolherImagem();
+  return f ? enviarImagem(alvo, id, tipo, f) : null;
+}
+async function enviarImagem(alvo, id, tipo, f) {
   toast('Enviando ' + f.name + '…');
   const base64 = await lerBase64(f);
   const r = await run('enviarArquivo', { alvo, id, tipo, nome: f.name, mime: f.type || 'image/png', base64 });
@@ -1179,7 +1197,7 @@ const VIEWS = {};
 VIEWS.inicio = function () {
   const wrap = h('div', { class: 'stack' });
   const prox = proximaFesta();
-  wrap.appendChild(topo(`Oi, ${S.me.nome.split(' ')[0]}`, btn('Nova festa', novaFesta, 'primary', 'plus')));
+  wrap.appendChild(topo(`Oi, ${S.me.nome.split(' ')[0]}`, btn('Nova festa', () => novaFesta(), 'primary', 'plus')));
   if (prox) {
     const n = diasAte(prox.data), pr = progresso(prox.id), tema = temaDe(prox), mapa = prox.mapaId ? porId('mapas', prox.mapaId) : null;
     // logo da festa (quando já existe) bem clarinho no fundo do card
@@ -1239,7 +1257,29 @@ function campoDataFesta(data) {
   return h('label', { class: 'f' }, h('span', {}, 'Data ', dia), data);
 }
 
-function novaFesta(pre) {
+// antes do formulário: define o tema da festa (escolher do banco, criar agora ou deixar para depois)
+function novaFesta() {
+  const temas = lista('temas').slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const opcao = (ic, titulo, desc, acao, off) => h('button', { type: 'button', class: 'opcao', disabled: !!off, onclick: acao },
+    h('span', { class: 'opcao-ic' }, icon(ic)), h('span', { class: 'opcao-txt' }, h('b', {}, titulo), h('span', {}, desc)));
+  const corpo = h('div', { class: 'opcoes' });
+  const m = modal({ titulo: 'Nova festa', corpo });
+  const seguir = (pre) => { m.fechar(); formNovaFesta(pre); };
+  const verTemas = () => corpo.replaceChildren(
+    h('button', { type: 'button', class: 'btn ghost sm opcao-voltar', onclick: verOpcoes }, icon('voltar'), 'Voltar'),
+    h('div', { class: 'opcoes-temas' }, temas.map((t) => h('button', { type: 'button', class: 'opcao opcao-tema', onclick: () => seguir({ temaId: t.id }) },
+      h('span', { class: 'opcao-txt' }, h('b', {}, t.nome), t.descricao ? h('span', {}, t.descricao) : null),
+      h('span', { class: 'opcao-cores' }, (t.paleta || []).map((c) => h('i', { style: { background: c } })))))));
+  function verOpcoes() {
+    corpo.replaceChildren(
+      opcao('temas', 'Escolher tema', temas.length ? 'Usar um tema do banco' : 'Nenhum tema no banco ainda', verTemas, !temas.length),
+      opcao('plus', 'Criar tema', 'Cadastrar um tema novo para esta festa', () => { m.fechar(); editarTema(null, (t) => formNovaFesta({ temaId: t.id })); }),
+      opcao('relogio', 'Escolher depois', 'Criar a festa sem tema por enquanto', () => seguir()));
+  }
+  verOpcoes();
+}
+
+function formNovaFesta(pre) {
   pre = pre || {};
   const nome = inp({ value: pre.nome || '', placeholder: 'Ex.: Halloween Slasher' });
   const data = inp({ type: 'date', value: pre.data || '' });
@@ -1941,7 +1981,7 @@ function desenharSugestoes(box, s) {
       } }, icon('coracao'), String(i.n)),
       h('div', { class: 't' }, h('div', {}, h('b', {}, i.titulo)), h('div', { class: 's' }, [i.descricao, `por ${nomePessoa(i.criadoPor)}`].filter(Boolean).join(' · ')),
         (i.tags || []).length ? h('div', { class: 'row', style: { marginTop: '4px' } }, i.tags.map((t) => h('span', { class: 'chip' }, t))) : null),
-      btn('Virar tema', () => editarTema({ nome: i.titulo, descricao: i.descricao, tags: i.tags }, () => toast('Tema criado', 'ok')), 'sm'),
+      btn('Virar tema', () => editarTema({ nome: i.titulo, descricao: i.descricao, tags: i.tags }, () => {}), 'sm'),
       btn('', async () => { if (await excluir('ideias', i.id, i.titulo)) render(); }, 'ghost sm', 'x'));
   }))) : vazio('Nenhuma ideia ainda', 'Qualquer um pode sugerir e votar.'));
 
@@ -1951,7 +1991,7 @@ function desenharSugestoes(box, s) {
     h('div', { style: { width: '58px', textAlign: 'center' } }, h('div', { style: { fontWeight: 800, fontSize: '18px' } }, fmtDM(d.data)), h('div', { class: 'small faint' }, DIAS[dt(d.data).getUTCDay()])),
     h('div', { class: 't' }, h('div', {}, h('b', {}, d.nome), ' ', h('span', { class: 'chip' }, d.regiao), ' ', h('span', { class: 'chip' }, d.tipo)),
       h('div', { class: 's' }, emDias(d.faltam), d.ideia ? ` · ideia: ${d.ideia}` : '')),
-    btn('Criar tema', () => editarTema({ nome: d.ideia ? d.ideia.split('/')[0].trim() : d.nome, descricao: `${d.nome} (${fmtDM(d.data)})${d.ideia ? ' — ' + d.ideia : ''}` }, () => toast('Tema criado', 'ok')), 'sm', 'plus'))))) : vazio('Nenhuma data nos próximos 90 dias', 'Cadastre datas na aba Calendário.'));
+    btn('Criar tema', () => editarTema({ nome: d.ideia ? d.ideia.split('/')[0].trim() : d.nome, descricao: `${d.nome} (${fmtDM(d.data)})${d.ideia ? ' — ' + d.ideia : ''}` }, () => {}), 'sm', 'plus'))))) : vazio('Nenhuma data nos próximos 90 dias', 'Cadastre datas na aba Calendário.'));
 
   // Fora da caixinha: sorteio do banco de ideias ou ideias novas da IA
   box.appendChild(secaoForaDaCaixa());
@@ -1983,7 +2023,7 @@ function secaoForaDaCaixa() {
       h('div', { class: 'small muted', style: { flex: '1' } }, x.vibe),
       h('div', { class: 'row' }, x.tags.map((t) => h('span', { class: 'chip' }, t))),
       h('div', { class: 'row' },
-        btn('Criar tema', () => editarTema({ nome: x.nome, descricao: x.vibe, tags: x.tags }, () => toast('Tema criado', 'ok')), 'sm primary', 'plus'),
+        btn('Criar tema', () => editarTema({ nome: x.nome, descricao: x.vibe, tags: x.tags }, () => {}), 'sm primary', 'plus'),
         btn('Virar ideia', () => novaIdeia({ titulo: x.nome, descricao: x.vibe, tags: x.tags }), 'sm')))));
   };
   const carregar = async (ia, b) => {
@@ -2065,9 +2105,19 @@ function editarTema(t, depois) {
   bCores.addEventListener('click', () => sugerir(bCores, 'cores'));
   bTags.addEventListener('click', () => sugerir(bTags, 'tags'));
   const refsBox = h('div', {});
+  // no tema novo ainda não há pasta no Drive: as imagens esperam aqui e sobem ao criar o tema
+  const pendentes = [];
+  const botaoEnviar = (acao) => h('button', { class: 'thumb', style: { cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--muted)' }, onclick: acao },
+    h('div', {}, icon('upload'), h('div', { class: 'small' }, 'Enviar imagem')));
   function desenharRefs(atual) {
     refsBox.innerHTML = '';
-    if (novo && !atual.id) { refsBox.appendChild(h('div', { class: 'hint' }, 'Salve o tema para enviar imagens de referência (moodboard).')); return; }
+    if (novo) {
+      refsBox.appendChild(h('div', { class: 'files' }, pendentes.map((f, i) => h('div', { class: 'thumb', style: { backgroundImage: `url("${URL.createObjectURL(f)}")` } },
+        h('span', { class: 'lbl' }, f.name),
+        h('button', { class: 'btn sm rm', onclick: () => { pendentes.splice(i, 1); desenharRefs(atual); } }, icon('x')))),
+      botaoEnviar(async () => { const f = await escolherImagem(); if (f) { pendentes.push(f); desenharRefs(atual); } })));
+      return;
+    }
     refsBox.appendChild(h('div', { class: 'files' }, (atual.refs || []).map((r) => {
       const th = thumbDrive(r.fileId, '', r.nome);
       th.appendChild(h('button', { class: 'btn sm rm', onclick: async () => {
@@ -2075,11 +2125,24 @@ function editarTema(t, depois) {
         const res = await run('removerArquivo', { alvo: 'temas', id: atual.id, fileId: r.fileId }); upsert('temas', res.salvo); desenharRefs(res.salvo);
       } }, icon('x')));
       return th;
-    }), h('button', { class: 'thumb', style: { cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--muted)' }, onclick: async () => {
-      const r = await enviar('temas', atual.id, 'ref'); if (r) desenharRefs(r);
-    } }, h('div', {}, icon('upload'), h('div', { class: 'small' }, 'Enviar imagem')))));
+    }), botaoEnviar(async () => { const r = await enviar('temas', atual.id, 'ref'); if (r) desenharRefs(r); })));
   }
   desenharRefs(t);
+  const visual = editorVisualTema(t);
+  let criando = false;
+  const criar = async () => {
+    if (criando) return;
+    criando = true;
+    const salvo = await salvar('temas', { nome: nome.value.trim(), descricao: desc.value.trim(), tags: tags.valores(), paleta });
+    const v = visual.visualAlterado();
+    try {
+      if (pendentes.length || v) await filaSalvar;
+      for (const f of pendentes) await enviarImagem('temas', salvo.id, 'ref', f);
+      if (v) upsert('temas', (await run('salvarVisualTema', { temaId: salvo.id, visual: v })).salvo);
+    } catch (e) { }
+    toast('Tema criado', 'ok'); m.fechar();
+    if (depois) depois(salvo); else render();
+  };
   const m = modal({
     titulo: novo ? 'Novo tema' : 'Editar tema', wide: true,
     corpo: h('div', { class: 'form' },
@@ -2087,14 +2150,14 @@ function editarTema(t, depois) {
       h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Paleta (até 5 cores)'), palBox, h('div', { class: 'row' }, bCores)),
       h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Tags'), tags, h('div', { class: 'row' }, bTags), h('span', { class: 'hint' }, 'Usadas para buscar mapas (terror → horror, praia → beach…)')),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Referências (moodboard no Drive)'), refsBox),
-      novo ? null : editorVisualTema(t)),
+      visual),
     acoes: [!novo ? btn('Excluir', async () => { if (await excluir('temas', t.id, t.nome)) { m.fechar(); render(); } }, 'ghost danger') : null,
       h('span', { class: 'grow' }), btn('Cancelar', () => m.fechar(), 'ghost'),
       btn(novo ? 'Criar tema' : 'Salvar', async () => {
         if (!nome.value.trim()) { toast('Dê um nome ao tema', 'err'); return; }
+        if (novo) { await criar(); return; }
         const salvo = await salvar('temas', { id: t.id, nome: nome.value.trim(), descricao: desc.value.trim(), tags: tags.valores(), paleta });
-        if (novo) { t = salvo; toast('Tema criado — agora dá para enviar referências', 'ok'); desenharRefs(salvo); m.fechar(); depois && depois(salvo); if (!depois) render(); }
-        else { m.fechar(); depois ? depois(salvo) : render(); }
+        m.fechar(); depois ? depois(salvo) : render();
       }, 'primary')]
   });
 }
@@ -3162,17 +3225,22 @@ function editorVisualTema(t) {
   };
   [fonte, estilo, acento, tinta, brilho, op].forEach((e) => e.addEventListener('input', desenhar));
   desenhar();
+  const lerVisual = () => ({ auto: auto.checked, fonteInfo: fonte.value, estiloInfo: estilo.value, acento: acento.value, acentoRegras: acento.value, tinta: tinta.value, tintaOpacidade: Number(op.value), brilho: brilho.value });
   const salvarV = async () => {
-    const r = await run('salvarVisualTema', { temaId: t.id, visual: { auto: auto.checked, fonteInfo: fonte.value, estiloInfo: estilo.value, acento: acento.value, acentoRegras: acento.value, tinta: tinta.value, tintaOpacidade: Number(op.value), brilho: brilho.value } });
+    const r = await run('salvarVisualTema', { temaId: t.id, visual: lerVisual() });
     upsert('temas', r.salvo); toast('Visual salvo', 'ok');
   };
-  return h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Visual nas artes'),
+  let mexeu = false;
+  const el = h('div', { class: 'f full', oninput: () => { mexeu = true; }, onchange: () => { mexeu = true; } }, h('span', { class: 'small muted' }, 'Visual nas artes'),
     h('div', { class: 'card', style: { background: 'var(--surface2)' } },
       h('label', { class: 'row small', style: { marginBottom: '10px' } }, auto, 'Deixar o Claude ajustar sozinho a cada pedido'),
       h('div', { class: 'form' }, campo('Fonte da faixa de info', fonte), campo('Estilo', estilo),
         h('div', { class: 'row' }, campo('Destaque', acento), campo('Brilho', brilho), campo('Tinta do fundo', tinta), campo('Força da tinta', op))),
       h('div', { style: { marginTop: '10px' } }, amostra),
-      h('div', { class: 'row end', style: { marginTop: '10px' } }, btn('Salvar visual', salvarV, 'sm primary'))));
+      t.id ? h('div', { class: 'row end', style: { marginTop: '10px' } }, btn('Salvar visual', salvarV, 'sm primary')) : null));
+  // tema novo: o visual vai junto ao criar o tema
+  el.visualAlterado = () => (mexeu ? lerVisual() : null);
+  return el;
 }
 
 // ---------- Equipe e ajustes ----------
