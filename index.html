@@ -90,7 +90,7 @@ img { max-width: 100%; }
 .graf-dica b { display: block; font-size: 13px; color: var(--text); }
 .graf-dica span { display: block; color: var(--muted); }
 .tabela-noites-wrap { overflow-x: auto; margin: 0 -4px; }
-.tabela-noites { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 810px; }
+.tabela-noites { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 900px; }
 .tabela-noites th { text-align: right; font-weight: 600; font-size: 12px; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
 .tabela-noites th:first-child { text-align: left; }
 .tabela-noites th.ord { cursor: pointer; user-select: none; transition: color .15s; }
@@ -371,6 +371,7 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
 .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: var(--r-sm); overflow: hidden; }
 .seg button { border: 0; background: none; color: var(--muted); padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .seg button.on { background: rgba(23, 216, 200, .14); color: var(--a1); }
+.seg-status button { padding: 8px 10px; }
 .seg-status button.on { background: color-mix(in srgb, currentColor 14%, transparent); }
 .cal-topo { margin-bottom: 10px; gap: 8px; }
 .cal-mes { margin: 0; min-width: 170px; text-align: center; }
@@ -1646,6 +1647,21 @@ async function restaurarNoite(n) {
 }
 
 function seguidoresDe(n) { const r = registroNoite(n.noite); return r && r.seguidoresInsta ? Number(r.seguidoresInsta) : null; }
+function mediaNoite(n) {
+  const notas = Object.values((registroNoite(n.noite) || {}).avaliacoes || {});
+  return notas.length ? notas.reduce((s, x) => s + x, 0) / notas.length : null;
+}
+const fmtMedia = (x) => x.toFixed(1).replace('.', ',');
+// estrelas da festa: cada pessoa da equipe dá a sua nota (clicar na mesma estrela tira) e aparece a média de todos
+function cardAvaliacao(n) {
+  const notas = (registroNoite(n.noite) || {}).avaliacoes || {}, qtd = Object.keys(notas).length, media = mediaNoite(n);
+  const estr = estrelas(notas[S.me.email] || 0, async (v) => {
+    const r = await run('avaliarNoite', { noite: n.noite, nota: v });
+    upsert('noitesMetricas', r.salvo); render();
+  });
+  return h('div', { class: 'card row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Avaliação da festa'), estr,
+    h('span', { class: 'small muted' }, media === null ? 'ninguém avaliou ainda' : `média ${fmtMedia(media)} · ${qtd} ${qtd === 1 ? 'avaliação' : 'avaliações'}`));
+}
 function membrosDe(n) { const r = registroNoite(n.noite); return r && r.membrosGrupo ? Number(r.membrosGrupo) : null; }
 const fmtNum = (x) => Number(x).toLocaleString('pt-BR');
 function renomearNoite(n) {
@@ -1689,7 +1705,7 @@ VIEWS.metricas = function () {
       h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
       seguidoresDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Seguidores no Insta nessa noite: ${fmtNum(seguidoresDe(sel_))}`) : null,
       membrosDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Membros do grupo no VRChat nessa noite: ${fmtNum(membrosDe(sel_))}`) : null,
-      h('div', { class: 'card' }, painelVrcx(sel_)));
+      h('div', { class: 'stack' }, cardAvaliacao(sel_), h('div', { class: 'card' }, painelVrcx(sel_))));
   }
   // resumo geral
   const todos = new Map();
@@ -1732,7 +1748,8 @@ const COLS_NOITE = [
   { k: 'tempo', t: 'Tempo médio', ic: 'relogio', v: (n) => (n.parcial ? null : n.tempoMedioMin || 0) },
   { k: 'novos', t: '1ª vez', ic: 'novo', v: (n) => n.novos },
   { k: 'insta', t: 'Insta', ic: 'insta', v: (n) => seguidoresDe(n) },
-  { k: 'grupo', t: 'Grupo VRC', ic: 'novo', v: (n) => membrosDe(n) }
+  { k: 'grupo', t: 'Grupo VRC', ic: 'novo', v: (n) => membrosDe(n) },
+  { k: 'nota', t: 'Estrelas', ic: 'estrela', v: (n) => mediaNoite(n) }
 ];
 // colunas preenchidas à mão: sem valor, mostram o link "+ anotar"
 const ANOTADAS = { insta: true, grupo: true };
@@ -1771,6 +1788,7 @@ function tabelaNoites(noites) {
         cel(COLS_NOITE[4], n, n.novos),
         cel(COLS_NOITE[5], n, seguidoresDe(n) !== null ? fmtNum(seguidoresDe(n)) : ''),
         cel(COLS_NOITE[6], n, membrosDe(n) !== null ? fmtNum(membrosDe(n)) : ''),
+        cel(COLS_NOITE[7], n, mediaNoite(n) !== null ? fmtMedia(mediaNoite(n)) : ''),
         h('td', { class: 'acoes' }, btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
           btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')));
     }))));
