@@ -185,6 +185,14 @@ img { max-width: 100%; }
 .esc-add svg { width: 14px; height: 14px; }
 .esc-add select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
 @media (max-width: 560px) { .esc-linha { grid-template-columns: 1fr; gap: 6px; } }
+.detalhes { border-top: 1px solid var(--line); padding-top: 12px; }
+.detalhes summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: 13px; }
+.detalhes summary::-webkit-details-marker { display: none; }
+.detalhes summary svg { flex: none; width: 15px; height: 15px; color: var(--muted); transform: rotate(180deg); transition: transform .15s; }
+.detalhes[open] summary svg { transform: rotate(-90deg); }
+.detalhes summary b { font-weight: 600; }
+.det-resumo { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); }
+.detalhes .form { margin-top: 14px; }
 .tabs-linha { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 .tabs-linha .tabs { flex: 1; min-width: 0; border-bottom: 0; margin-bottom: 0; }
 .aba-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--faint); cursor: pointer; transition: color .15s; }
@@ -1343,16 +1351,19 @@ function festaGeral(f) {
 
   // DJs
   let djIds = (f.djIds || []).slice();
-  const djBox = h('div', { class: 'stack', style: { gap: '8px' } });
+  const djBox = h('div', { class: 'esc-pessoas' });
   function desenharDJs() {
-    djBox.innerHTML = '';
     const escolhidos = djIds.map((id) => porId('djs', id)).filter(Boolean);
-    djBox.appendChild(h('div', { class: 'row' }, escolhidos.length ? escolhidos.map((d) =>
-      h('span', { class: 'chip on x', onclick: () => { djIds = djIds.filter((x) => x !== d.id); desenharDJs(); } }, d.nome, ' ×')) : h('span', { class: 'muted small' }, 'Nenhum DJ ainda')));
     const resto = lista('djs').filter((d) => !djIds.includes(d.id)).sort((a, b) => a.nome.localeCompare(b.nome));
-    const s = sel([['', '+ adicionar DJ…']].concat(resto.map((d) => [d.id, d.nome + (d.estilos && d.estilos.length ? ' · ' + d.estilos.join(', ') : '')])), '',
-      { onchange: () => { if (s.value) { djIds.push(s.value); desenharDJs(); } } });
-    djBox.appendChild(h('div', { class: 'row' }, h('div', { class: 'grow' }, s), btn('Novo DJ', () => editarDJRapido((d) => { djIds.push(d.id); desenharDJs(); }), 'sm', 'plus')));
+    const add = sel([['', 'Adicionar DJ']].concat(resto.map((d) => [d.id, d.nome + (d.estilos && d.estilos.length ? ' · ' + d.estilos.join(', ') : '')]), [['novo', '+ Cadastrar DJ novo']]), '', {
+      'aria-label': 'Adicionar DJ',
+      onchange: () => {
+        if (add.value === 'novo') { add.value = ''; editarDJRapido((d) => { djIds.push(d.id); desenharDJs(); }); return; }
+        if (add.value) { djIds.push(add.value); desenharDJs(); }
+      } });
+    djBox.replaceChildren(...escolhidos.map((d) => h('span', { class: 'esc-pessoa' }, h('span', { class: 'esc-nome' }, avatar(d.nome, 22), d.nome),
+      h('button', { type: 'button', class: 'esc-x', 'aria-label': 'Tirar ' + d.nome, onclick: () => { djIds = djIds.filter((x) => x !== d.id); desenharDJs(); } }, icon('x')))),
+    h('span', { class: 'esc-add' }, icon('plus'), add));
   }
   desenharDJs();
 
@@ -1366,8 +1377,26 @@ function festaGeral(f) {
     ir('mapas', { aba: 'buscar', festaId: f.id, texto: t ? t.nome : '', tags: t ? t.tags || [] : [] });
   };
 
+  // nome, data, início, tema, dress code e notas ficam recolhidos; o resumo acompanha o que for mudado
+  const resumo = h('span', { class: 'det-resumo' });
+  const atualizarResumo = () => {
+    const t = porId('temas', tema.value);
+    resumo.textContent = [data.value ? fmtNoite(data.value) : '', horaI.value, t ? t.nome : '', dress.value.trim()].filter(Boolean).join(' · ');
+  };
+  [data, horaI, tema, dress].forEach((c) => { c.addEventListener('input', atualizarResumo); c.addEventListener('change', atualizarResumo); });
+  atualizarResumo();
+  const detalhes = h('details', { class: 'detalhes full', ontoggle: () => { S.festaDetalhes = detalhes.open; } },
+    h('summary', {}, icon('voltar'), h('b', {}, 'Detalhes'), resumo),
+    h('div', { class: 'form' },
+      campo('Nome da festa', nome, { full: true }),
+      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
+      h('label', { class: 'f' }, 'Tema', tema, h('span', { class: 'hint' }, h('a', { href: '#', onclick: (e) => { e.preventDefault(); editarTema(null, (t) => { tema.appendChild(h('option', { value: t.id }, t.nome)); tema.value = t.id; }); } }, '+ criar tema novo'))),
+      campo('Dress code', dress),
+      campo('Notas internas', notas, { full: true })));
+  detalhes.open = !!S.festaDetalhes;
+
   const salvarTudo = async () => {
-    if (!nome.value.trim() || !data.value) { toast('Nome e data são obrigatórios', 'err'); return; }
+    if (!nome.value.trim() || !data.value) { detalhes.open = true; toast('Nome e data são obrigatórios', 'err'); return; }
     const antes = f.data;
     await salvar('festas', { id: f.id, nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: tema.value,
       dressCode: dress.value.trim(), notas: notas.value, djIds, mapaId: mapaSel.value });
@@ -1377,16 +1406,12 @@ function festaGeral(f) {
 
   return h('div', { class: 'stack' },
     h('div', { class: 'card' }, h('div', { class: 'form' },
-      campo('Nome da festa', nome, { full: true }),
-      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
-      h('label', { class: 'f' }, 'Tema', tema, h('span', { class: 'hint' }, h('a', { href: '#', onclick: (e) => { e.preventDefault(); editarTema(null, (t) => { tema.appendChild(h('option', { value: t.id }, t.nome)); tema.value = t.id; }); } }, '+ criar tema novo'))),
-      campo('Dress code', dress),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'DJs da festa'), djBox),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Mapa do VRChat'),
         h('div', { class: 'row' }, h('div', { class: 'grow' }, mapaSel), btn('Sugerir mapas', buscarMapas, 'sm', 'busca')),
         mapaAtual ? h('div', { class: 'row small', style: { marginTop: '6px' } }, chipStatus(mapaAtual.status), mapaAtual.capacidade ? `cap. ${mapaAtual.capacidade}` : null,
           h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null),
-      campo('Notas internas', notas, { full: true }))),
+      detalhes)),
     blocoEscala(f),
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
