@@ -1327,13 +1327,12 @@ VIEWS.festa = function () {
   const nAtiv = lista('atividades').filter((a) => a.festaId === f.id).length;
   const stBotoes = h('div', { class: 'seg seg-status' }, S.consts.statusFesta.map((st) =>
     h('button', { type: 'button', class: st === f.status ? 'on st-' + st : '', onclick: async () => { if (st !== f.status) { await salvar('festas', { id: f.id, status: st }); render(); } } }, st)));
-  const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, historico: festaHistorico }[aba] || festaGeral;
-  const rot = roteiroDa(f.id);
+  const corpo = { geral: festaGeral, atividades: festaAtividades, artes: festaArtes, checklist: festaChecklist, historico: festaHistorico }[aba] || festaGeral;
   return h('div', {},
     topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stBotoes), () => ir('festas')),
     h('div', { class: 'row muted', style: { marginTop: '-10px', marginBottom: '16px' } }, h('span', {}, fmtDataLonga(f.data)), parHorario(f), tema ? h('span', { class: 'chip' }, tema.nome) : null),
     h('div', { class: 'tabs-linha' },
-      abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`]],
+      abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`]],
         aba, (k) => { S.rota.aba = k; render(); }),
       h('button', { class: 'aba-ic' + (aba === 'historico' ? ' on' : ''), title: 'Histórico', 'aria-label': 'Histórico', onclick: () => { S.rota.aba = aba === 'historico' ? 'geral' : 'historico'; render(); } }, icon('historico'))),
     corpo(f));
@@ -1413,7 +1412,8 @@ function festaGeral(f) {
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Mapa do VRChat'),
         h('div', { class: 'row' }, h('div', { class: 'grow' }, mapaSel), btn('Sugerir mapas', buscarMapas, 'sm', 'busca')),
         mapaAtual ? h('div', { class: 'row small', style: { marginTop: '6px' } }, chipStatus(mapaAtual.status), mapaAtual.capacidade ? `cap. ${mapaAtual.capacidade}` : null,
-          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null))),
+          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null),
+      h('div', { class: 'full' }, btn('Roteiro do vídeo de divulgação', () => ir('roteiros', { id: f.id }), '', 'roteiros')))),
     blocoEscala(f),
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
@@ -2441,13 +2441,15 @@ async function copiarTexto(txt) {
 }
 
 VIEWS.roteiros = function () {
+  const aberta = S.rota.id ? porId('festas', S.rota.id) : null;
+  if (aberta) return h('div', {}, topo('Roteiro: ' + aberta.nome, null, () => ir('roteiros')), festaRoteiro(aberta));
   const fs = festasOrdenadas();
   const prox = fs.filter((f) => f.data >= S.hoje && f.status !== 'Cancelada');
   const passadas = fs.filter((f) => f.data < S.hoje).reverse().slice(0, 10);
   const linha = (f) => {
     const r = roteiroDa(f.id);
     const total = r ? partesIncluidas(r).reduce((n, p) => n + palavras(p.texto), 0) : 0;
-    return h('div', { class: 'li', style: { cursor: 'pointer' }, onclick: () => ir('festa', { id: f.id, aba: 'roteiro' }) },
+    return h('div', { class: 'li', style: { cursor: 'pointer' }, onclick: () => ir('roteiros', { id: f.id }) },
       h('div', { style: { width: '58px', textAlign: 'center' } }, h('div', { style: { fontWeight: 800 } }, fmtDM(f.data)), h('div', { class: 'small faint' }, DIAS[dt(f.data).getUTCDay()])),
       h('div', { class: 't' }, h('div', {}, h('b', {}, f.nome)), h('div', { class: 's' }, r ? `${total} palavras · ~${segundosFala(total)}s de fala` : 'ainda sem roteiro')),
       r ? h('span', { class: 'chip st-' + (r.status === 'Gravado' ? 'Realizada' : r.status === 'Finalizado' ? 'Confirmada' : 'Ideia') }, r.status) : h('span', { class: 'chip' }, 'sem roteiro'),
