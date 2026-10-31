@@ -2821,10 +2821,10 @@ function festaArtes(f) {
     h('div', { class: 'stack', style: { gap: '6px', marginTop: '10px' } },
       req(liberaStatus, 'Festa Confirmada (status atual: ' + f.status + ')'),
       req(!!A.logo, 'Logo da festa enviado'),
-      h('div', { class: 'row small' }, h('span', { class: 'chip ' + (A.fundos.principal ? 'st-Realizada' : '') }, A.fundos.principal ? 'ok' : 'Claude'),
-        A.fundos.principal ? 'Fundo principal escolhido' : 'Sem fundo: o Claude desenha um no clima do tema (opcional)')),
+      h('div', { class: 'row small' }, h('span', { class: 'chip ' + (A.fundos.principal ? 'st-Realizada' : '') }, A.fundos.principal ? 'ok' : 'IA'),
+        A.fundos.principal ? 'Fundo principal escolhido' : 'Sem fundo: a IA desenha um no clima do tema (opcional)')),
     naFila.length ? h('div', { class: 'small soon', style: { marginTop: '10px' } },
-      `${naFila.length} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; o app confere sozinho quando esta aba é aberta.`) : null));
+      `${naFila.length} pedido(s) na fila. Quem tem a IA roda /many-artes no PC; o app confere sozinho quando esta aba é aberta.`) : null));
   if (naFila.length) verificarSozinho(f);
 
   box.appendChild(secaoLogo(f, A));
@@ -2896,10 +2896,10 @@ function secaoTextosArte(f, A) {
 function secaoFundos(f, A) {
   const tema = temaDe(f);
   return h('div', { class: 'card' }, h('h3', {}, 'Fundos (opcional)'),
-    h('div', { class: 'hint', style: { marginBottom: '12px' } }, 'Deixe vazio e o Claude cria o fundo no clima do tema, desenhado para a festa. Se quiser algo específico, descreva na observação do pedido (ex.: "céu estrelado com nuvens rosa"). Os fundos de DJ e de atividade, se vazios, seguem o mesmo clima com variações.'),
+    h('div', { class: 'hint', style: { marginBottom: '12px' } }, 'Deixe vazio e a IA cria o fundo no clima do tema, desenhado para a festa. Se quiser algo específico, descreva na observação do pedido (ex.: "céu estrelado com nuvens rosa"). Os fundos de DJ e de atividade, se vazios, seguem o mesmo clima com variações.'),
     h('div', { class: 'grid' }, S.artesConsts.slotsFundo.map((slot) => {
       const fu = A.fundos[slot];
-      const prev = fu ? thumbDrive(fu.fileId) : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--muted)', textAlign: 'center', padding: '10px' } }, 'vazio: o Claude cria');
+      const prev = fu ? thumbDrive(fu.fileId) : h('div', { class: 'thumb', style: { display: 'grid', placeItems: 'center', color: 'var(--muted)', textAlign: 'center', padding: '10px' } }, 'vazio: a IA cria');
       prev.style.aspectRatio = '9 / 16'; prev.style.backgroundSize = 'cover';
       return h('div', { class: 'stack', style: { gap: '8px' } }, h('div', { class: 'small muted' }, NOMES_FUNDO[slot]), prev,
         fu && fu.credito ? h('div', { class: 'small faint' }, 'Foto de ', h('a', { href: fu.perfil || fu.link, target: '_blank' }, fu.credito), fu.licenca ? ' (' + fu.licenca + ')' : '', ' via ', h('a', { href: fu.link, target: '_blank' }, fu.fonte || 'Unsplash')) : null,
@@ -2953,7 +2953,7 @@ function secaoDecorativos(f, A) {
     catch (e) { bGerar.disabled = false; bGerar.lastChild.textContent = 'Gerar prompts'; }
   });
   return h('div', { class: 'card' }, h('h3', {}, 'Decorativos (opcional)'),
-    h('div', { class: 'hint', style: { marginBottom: '10px' } }, 'A posição, o tamanho e o giro de cada decorativo o Claude escolhe em cada peça, variando para não ficar repetitivo.'),
+    h('div', { class: 'hint', style: { marginBottom: '10px' } }, 'A posição, o tamanho e o giro de cada decorativo a IA escolhe em cada peça, variando para não ficar repetitivo.'),
     A.decorativos.length ? h('div', { class: 'files' }, A.decorativos.map((d) => {
       const th = thumbDrive(d.fileId, 'checker');
       th.appendChild(h('button', { class: 'btn sm rm', onclick: () => removerDaFesta(f, d.fileId) }, icon('x')));
@@ -2964,7 +2964,7 @@ function secaoDecorativos(f, A) {
     sug,
     h('div', { class: 'row', style: { marginTop: '8px' } }, bGerar, h('span', { class: 'hint' }, 'Os simples (brilhos, estrelas, linhas) eu desenho direto na arte; os realistas viram prompt para o ChatGPT.')),
     A.promptsDeco.length ? h('div', { class: 'list', style: { marginTop: '10px' } }, A.promptsDeco.map((p) => h('div', { class: 'li', style: { alignItems: 'flex-start' } },
-      h('div', { class: 't' }, h('div', {}, h('b', {}, p.elemento), ' ', p.vetor ? h('span', { class: 'chip' }, 'o Claude desenha') : h('span', { class: 'chip on' }, 'ChatGPT')),
+      h('div', { class: 't' }, h('div', {}, h('b', {}, p.elemento), ' ', p.vetor ? h('span', { class: 'chip' }, 'a IA desenha') : h('span', { class: 'chip on' }, 'ChatGPT')),
         p.vetor ? null : h('div', { class: 's', style: { whiteSpace: 'pre-wrap' } }, p.prompt)),
       p.vetor ? null : btn('Copiar', () => copiarTexto(p.prompt), 'sm', 'copiar')))) : null);
 }
@@ -2979,7 +2979,7 @@ function secaoPedido(f, A, liberaStatus) {
     marcados[k] = cb;
     return h('label', { class: 'row small', style: { gap: '8px', color: desab ? 'var(--faint)' : 'var(--text)' } }, cb, t + extra);
   });
-  const obs = area('', { placeholder: 'Observações para o Claude (ex.: deixar o roxo mais forte, DJ maior no story)', style: { minHeight: '60px' } });
+  const obs = area('', { placeholder: 'Observações para a IA (ex.: deixar o roxo mais forte, DJ maior no story)', style: { minHeight: '60px' } });
   const pronto = liberaStatus && !!A.logo;
   const bPedir = btn('Pedir artes', null, 'primary', 'ia');
   bPedir.disabled = !pronto;
@@ -3017,7 +3017,7 @@ function secaoAnimacoes(f, A) {
   const pedidos = lista('pedidosAnimacao').filter((p) => p.festaId === f.id).sort((a, b) => b.versao - a.versao);
   const obs = area('', { placeholder: 'Pedido específico (opcional): ex. animação mais calma, logo girando, brilho piscando no ritmo…', style: { minHeight: '60px' } });
   const trilhaBox = h('div', { class: 'row' },
-    A.trilha ? h('span', { class: 'chip on' }, 'Trilha: ' + A.trilha.nome) : h('span', { class: 'small muted' }, 'Sem trilha: o Claude escolhe uma música livre que combine com o tema (o crédito vai na legenda).'),
+    A.trilha ? h('span', { class: 'chip on' }, 'Trilha: ' + A.trilha.nome) : h('span', { class: 'small muted' }, 'Sem trilha: a IA escolhe uma música livre que combine com o tema (o crédito vai na legenda).'),
     btn(A.trilha ? 'Trocar trilha' : 'Enviar trilha', async () => {
       const arq = await escolherArquivo('audio/' + '*');
       if (!arq) return;
@@ -3047,7 +3047,7 @@ function secaoAnimacoes(f, A) {
       h('div', { class: 'row' }, h('b', {}, 'Animações v' + p.versao), h('span', { class: 'chip ' + (p.status === 'Pronto' ? 'st-Realizada' : 'st-Testando') }, p.status),
         p.trilha ? h('span', { class: 'chip' }, 'trilha: ' + p.trilha) : null, h('span', { class: 'grow' }), h('span', { class: 'small faint' }, fmtQuando(p.criadoEm))),
       p.obs ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, '"' + p.obs + '"') : null,
-      p.status === 'Na fila' ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Aguardando o Claude Code: ' + (p.pecas || []).join(', ')) : null,
+      p.status === 'Na fila' ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Aguardando a IA: ' + (p.pecas || []).join(', ')) : null,
       vids.length ? h('div', { class: 'list', style: { marginTop: '8px' } }, vids.map((v) => h('div', { class: 'li' },
         h('div', { class: 't' }, v.nome),
         h('a', { class: 'btn sm', href: linkDrive(v.fileId), target: '_blank' }, icon('play'), 'Ver'),
@@ -3069,7 +3069,7 @@ VIEWS.artes = function () {
     .forEach((id) => { const f = porId('festas', id); if (f) verificarSozinho(f); });
   return h('div', {},
     topo('Artes'),
-    naFila ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `${naFila} pedido(s) na fila. Quem tem o Claude Code roda /many-artes no PC; o app confere sozinho e as artes prontas aparecem aqui.`) : null,
+    naFila ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `${naFila} pedido(s) na fila. Quem tem a IA roda /many-artes no PC; o app confere sozinho e as artes prontas aparecem aqui.`) : null,
     abas([['proximas', 'Próximas festas'], ['passadas', 'Passadas']], filtro, (k) => ir('artes', { filtro: k })),
     fs.length ? h('div', { class: 'grid', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' } }, fs.map(cardArtesFesta))
       : vazio('Nenhuma festa aqui', 'As artes de cada festa aparecem aqui assim que ela for criada.'));
@@ -3123,7 +3123,7 @@ function secaoGeradas(f, pedidos) {
   pedidos.forEach((p, i) => {
     const doPedido = artes.filter((x) => x.pedidoId === p.id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
     const corpo = h('div', { style: { display: i === 0 ? '' : 'none', marginTop: '12px' } });
-    if (p.status === 'Na fila') corpo.appendChild(h('div', { class: 'small muted' }, 'Aguardando o Claude Code gerar. Peças: ' + (p.pecas || []).map((k) => (S.artesConsts.pecas.find((x) => x[0] === k) || [k, k])[1]).join(', ')));
+    if (p.status === 'Na fila') corpo.appendChild(h('div', { class: 'small muted' }, 'Aguardando a IA gerar. Peças: ' + (p.pecas || []).map((k) => (S.artesConsts.pecas.find((x) => x[0] === k) || [k, k])[1]).join(', ')));
     if ((p.avisos || []).length) corpo.appendChild(h('div', { class: 'small soon', style: { marginBottom: '10px' } }, p.avisos.map((a) => h('div', {}, a))));
     if (doPedido.length) {
       // seleção para mudar o status de várias artes de uma vez
@@ -3206,7 +3206,7 @@ function editorVisualTema(t) {
   const v = Object.assign({ auto: true, fonteInfo: '', estiloInfo: 'limpo', acento: '#ffd36b', tinta: '#000000', tintaOpacidade: 0, brilho: '#ff64dc' }, t.visual || {});
   const F = S.artesConsts.fontes;
   const auto = h('input', { type: 'checkbox', checked: v.auto !== false });
-  const fonte = sel([['', '— o Claude escolhe —']].concat(F.rua.map((x) => [x, 'Rua: ' + x])).concat(F.limpa.map((x) => [x, 'Limpa: ' + x])), v.fonteInfo || '');
+  const fonte = sel([['', '— a IA escolhe —']].concat(F.rua.map((x) => [x, 'Rua: ' + x])).concat(F.limpa.map((x) => [x, 'Limpa: ' + x])), v.fonteInfo || '');
   const estilo = sel([['limpo', 'Limpo (sombra)'], ['neon', 'Neon (brilho)']], v.estiloInfo);
   const acento = h('input', { type: 'color', class: 'in', value: v.acento });
   const tinta = h('input', { type: 'color', class: 'in', value: v.tinta });
@@ -3233,7 +3233,7 @@ function editorVisualTema(t) {
   let mexeu = false;
   const el = h('div', { class: 'f full', oninput: () => { mexeu = true; }, onchange: () => { mexeu = true; } }, h('span', { class: 'small muted' }, 'Visual nas artes'),
     h('div', { class: 'card', style: { background: 'var(--surface2)' } },
-      h('label', { class: 'row small', style: { marginBottom: '10px' } }, auto, 'Deixar o Claude ajustar sozinho a cada pedido'),
+      h('label', { class: 'row small', style: { marginBottom: '10px' } }, auto, 'Deixar a IA ajustar sozinho a cada pedido'),
       h('div', { class: 'form' }, campo('Fonte da faixa de info', fonte), campo('Estilo', estilo),
         h('div', { class: 'row' }, campo('Destaque', acento), campo('Brilho', brilho), campo('Tinta do fundo', tinta), campo('Força da tinta', op))),
       h('div', { style: { marginTop: '10px' } }, amostra),
