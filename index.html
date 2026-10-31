@@ -90,13 +90,14 @@ img { max-width: 100%; }
 .graf-dica b { display: block; font-size: 13px; color: var(--text); }
 .graf-dica span { display: block; color: var(--muted); }
 .tabela-noites-wrap { overflow-x: auto; margin: 0 -4px; }
-.tabela-noites { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 720px; }
+.tabela-noites { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 810px; }
 .tabela-noites th { text-align: right; font-weight: 600; font-size: 12px; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
 .tabela-noites th:first-child { text-align: left; }
 .tabela-noites th.ord { cursor: pointer; user-select: none; transition: color .15s; }
 .tabela-noites th.ord:hover, .tabela-noites th.on { color: var(--text); }
 .tabela-noites th.on { color: var(--a1); }
 .tabela-noites th.insta.on { color: #ff4fb8; }
+.tabela-noites th.grupo.on { color: #ffc24b; }
 .th-in { display: inline-flex; align-items: center; gap: 5px; }
 .th-in svg { width: 14px; height: 14px; }
 .th-in .seta { font-size: 10px; opacity: .6; }
@@ -111,6 +112,7 @@ img { max-width: 100%; }
 .mini-barra { display: block; height: 3px; width: 64px; margin: 4px 0 0 auto; border-radius: 3px; background: rgba(255,255,255,.07); overflow: hidden; }
 .mini-barra i { display: block; height: 100%; background: var(--a1); border-radius: 3px; }
 .tabela-noites td.insta .mini-barra i { background: #ff4fb8; }
+.tabela-noites td.grupo .mini-barra i { background: #ffc24b; }
 .tabela-noites .anotar { font-size: 12px; color: #ff4fb8; }
 .tabela-noites td.acoes { white-space: nowrap; text-align: right; width: 1%; }
 .graf-legenda { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
@@ -1720,8 +1722,11 @@ const COLS_NOITE = [
   { k: 'pico', t: 'Pico', ic: 'pico', v: (n) => n.pico },
   { k: 'tempo', t: 'Tempo médio', ic: 'relogio', v: (n) => (n.parcial ? null : n.tempoMedioMin || 0) },
   { k: 'novos', t: '1ª vez', ic: 'novo', v: (n) => n.novos },
-  { k: 'insta', t: 'Insta', ic: 'insta', v: (n) => seguidoresDe(n) }
+  { k: 'insta', t: 'Insta', ic: 'insta', v: (n) => seguidoresDe(n) },
+  { k: 'grupo', t: 'Grupo VRC', ic: 'novo', v: (n) => membrosDe(n) }
 ];
+// colunas preenchidas à mão: sem valor, mostram o link "+ anotar"
+const ANOTADAS = { insta: true, grupo: true };
 function tabelaNoites(noites) {
   const o = S.ordemNoites || { k: 'noite', dir: -1 };
   const col = COLS_NOITE.find((c) => c.k === o.k) || COLS_NOITE[0];
@@ -1736,13 +1741,13 @@ function tabelaNoites(noites) {
   const max = {};
   COLS_NOITE.slice(1).forEach((c) => { max[c.k] = Math.max(1, ...noites.map((n) => c.v(n) || 0)); });
   const ordenar = (k) => { S.ordemNoites = { k, dir: o.k === k ? -o.dir : -1 }; render(); };
-  const th = (c) => h('th', { class: 'ord' + (o.k === c.k ? ' on' : '') + (c.k === 'insta' ? ' insta' : ''), onclick: () => ordenar(c.k), title: 'Ordenar por ' + c.t.toLowerCase() },
+  const th = (c) => h('th', { class: 'ord' + (o.k === c.k ? ' on' : '') + (ANOTADAS[c.k] ? ' ' + c.k : ''), onclick: () => ordenar(c.k), title: 'Ordenar por ' + c.t.toLowerCase() },
     h('span', { class: 'th-in' }, icon(c.ic), c.t, h('span', { class: 'seta' }, o.k === c.k ? (o.dir > 0 ? '▲' : '▼') : '↕')));
   const cel = (c, n, txt) => {
     const v = c.v(n);
-    if (v === null && c.k !== 'insta') return h('td', { class: 'num' }, h('span', { class: 'faint', title: 'Noite registrada sem esse dado' }, '—'));
+    if (v === null && !ANOTADAS[c.k]) return h('td', { class: 'num' }, h('span', { class: 'faint', title: 'Noite registrada sem esse dado' }, '—'));
     if (v === null) return h('td', { class: 'num' }, h('a', { href: '#', class: 'anotar', onclick: (e) => { e.preventDefault(); e.stopPropagation(); renomearNoite(n); } }, '+ anotar'));
-    return h('td', { class: 'num' + (c.k === 'insta' ? ' insta' : '') }, h('b', {}, txt),
+    return h('td', { class: 'num' + (ANOTADAS[c.k] ? ' ' + c.k : '') }, h('b', {}, txt),
       h('span', { class: 'mini-barra' }, h('i', { style: { width: Math.round((v / max[c.k]) * 100) + '%' } })));
   };
   return h('div', { class: 'tabela-noites-wrap' }, h('table', { class: 'tabela-noites' },
@@ -1756,6 +1761,7 @@ function tabelaNoites(noites) {
         cel(COLS_NOITE[3], n, fmtMin(n.tempoMedioMin || 0)),
         cel(COLS_NOITE[4], n, n.novos),
         cel(COLS_NOITE[5], n, seguidoresDe(n) !== null ? fmtNum(seguidoresDe(n)) : ''),
+        cel(COLS_NOITE[6], n, membrosDe(n) !== null ? fmtNum(membrosDe(n)) : ''),
         h('td', { class: 'acoes' }, btn('', (e) => { e.stopPropagation(); renomearNoite(n); }, 'ghost sm', 'editar'),
           btn('', async (e) => { e.stopPropagation(); if (await apagarNoite(n)) render(); }, 'ghost sm danger', 'lixeira')));
     }))));
