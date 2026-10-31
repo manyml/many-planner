@@ -169,6 +169,12 @@ img { max-width: 100%; }
 .st-Testando { color: #ffd36b; border-color: #7a5f1c; }
 .st-Aprovado { color: var(--ok); border-color: #1d6b45; }
 .st-Reprovado { color: var(--danger); border-color: #7a2438; }
+.tabs-linha { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.tabs-linha .tabs { flex: 1; min-width: 0; border-bottom: 0; margin-bottom: 0; }
+.aba-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--faint); cursor: pointer; transition: color .15s; }
+.aba-ic svg { width: 17px; height: 17px; }
+.aba-ic:hover { color: var(--text); }
+.aba-ic.on { color: var(--a1); }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; scrollbar-width: none; }
 .tab { padding: 10px 14px; border: 0; background: none; color: var(--muted); font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
 .tab.on { color: var(--text); border-image: var(--grad) 1; border-bottom-width: 2px; border-bottom-style: solid; }
@@ -1295,13 +1301,15 @@ VIEWS.festa = function () {
   const pr = progresso(f.id), tema = temaDe(f);
   const nAtiv = lista('atividades').filter((a) => a.festaId === f.id).length;
   const stSel = sel(S.consts.statusFesta, f.status, { style: { width: 'auto' }, onchange: async () => { await salvar('festas', { id: f.id, status: stSel.value }); render(); } });
-  const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, escala: festaEscala, metricas: festaMetricas, historico: festaHistorico }[aba] || festaGeral;
+  const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, escala: festaEscala, historico: festaHistorico }[aba] || festaGeral;
   const rot = roteiroDa(f.id);
   return h('div', {},
     topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stSel), () => ir('festas')),
     h('div', { class: 'row muted', style: { marginTop: '-10px', marginBottom: '16px' } }, h('span', {}, fmtDataLonga(f.data)), parHorario(f), tema ? h('span', { class: 'chip' }, tema.nome) : null),
-    abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`], ['escala', 'Escala'], ['metricas', 'Métricas'], ['historico', 'Histórico']],
-      aba, (k) => { S.rota.aba = k; render(); }),
+    h('div', { class: 'tabs-linha' },
+      abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`], ['escala', 'Escala']],
+        aba, (k) => { S.rota.aba = k; render(); }),
+      h('button', { class: 'aba-ic' + (aba === 'historico' ? ' on' : ''), title: 'Histórico', 'aria-label': 'Histórico', onclick: () => { S.rota.aba = aba === 'historico' ? 'geral' : 'historico'; render(); } }, icon('historico'))),
     corpo(f));
 };
 
@@ -1519,47 +1527,9 @@ function festaEscala(f) {
     h('div', { class: 'hint' }, 'Funções novas: Equipe e ajustes → Funções.'));
 }
 
-function festaMetricas(f) {
-  const m = lista('metricas').find((x) => x.festaId === f.id) || {};
-  const num = (v, ph) => inp({ type: 'number', min: 0, value: v === null || v === undefined ? '' : v, placeholder: ph || '' });
-  const pico = num(m.pico), unicos = num(m.unicos, 'estimativa'), ng = num(m.novosGrupo), nd = num(m.novosDiscord), ni = num(m.novosIG);
-  const nota = estrelas(m.nota);
-  const funcionou = area(m.funcionou, { placeholder: 'Mapa, DJs, tema, atividades…' });
-  const melhorar = area(m.melhorar);
-  const v = (i) => (i.value === '' ? null : Number(i.value));
-  return h('div', { class: 'stack' },
-    f.data > S.hoje ? h('div', { class: 'hint' }, 'A festa ainda não aconteceu — preencha depois (tarefa D+2 do checklist).') : null,
-    cardVrcx(f, m),
-    h('div', { class: 'card' }, h('div', { class: 'form' },
-      h('div', { class: 'section-title full' }, 'Público'),
-      campo('Pico simultâneo', pico), campo('Pessoas únicas', unicos),
-      h('div', { class: 'section-title full' }, 'Crescimento após a festa'),
-      campo('Novos no grupo VRChat', ng), campo('Novos no Discord', nd), campo('Novos seguidores no Insta', ni),
-      h('div', { class: 'section-title full' }, 'Avaliação da equipe'),
-      h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Nota geral'), nota),
-      campo('O que funcionou', funcionou, { full: true }), campo('O que melhorar', melhorar, { full: true }))),
-    h('div', { class: 'row end' }, btn('Salvar métricas', async () => {
-      await salvar('metricas', { festaId: f.id, pico: v(pico), unicos: v(unicos), novosGrupo: v(ng), novosDiscord: v(nd), novosIG: v(ni),
-        nota: nota.valor() || null, funcionou: funcionou.value, melhorar: melhorar.value });
-      toast('Métricas salvas', 'ok');
-    }, 'primary')));
-}
-
 // ---------- métricas do VRCX (geradas no PC por vrcx/metricas.mjs) ----------
 const horaBR = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
 const fmtMin = (n) => (n >= 60 ? `${Math.floor(n / 60)}h${String(n % 60).padStart(2, '0')}` : `${n} min`);
-
-function cardVrcx(f, m) {
-  const importar = btn(m.vrcx ? 'Atualizar do VRCX' : 'Importar do VRCX', async () => {
-    const r = await run('importarVrcx', { festaId: f.id });
-    upsert('metricas', r.salvo); toast('Métricas do VRCX importadas', 'ok'); render();
-  }, m.vrcx ? 'sm' : 'primary sm', 'download');
-  if (!m.vrcx) return h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Público pelo VRCX'), importar), ajudaVrcx());
-  return h('div', { class: 'card stack' },
-    h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { margin: 0 } }, 'Público pelo VRCX'),
-      h('div', { class: 'small muted' }, `importado em ${fmtQuando(m.vrcx.importadoEm)}`)), importar),
-    painelVrcx(m.vrcx));
-}
 
 function ajudaVrcx() {
   return h('div', { class: 'hint' }, 'Na aba Métricas, baixe a ferramenta Many VRCX, gere o arquivo no PC com o VRCX e clique em Enviar arquivo. Só entra o que aconteceu enquanto essa pessoa estava na instância.');
@@ -1676,7 +1646,7 @@ VIEWS.metricas = function () {
     return h('div', {},
       topo(nomeNoite(sel_), h('div', { class: 'row' }, btn('Editar', () => renomearNoite(sel_), '', 'editar'),
         btn('Apagar', async () => { if (await apagarNoite(sel_)) ir('metricas'); }, 'ghost danger', 'lixeira'),
-        f ? btn('Abrir festa', () => ir('festa', { id: f.id, aba: 'metricas' }), 'ghost') : null), () => ir('metricas')),
+        f ? btn('Abrir festa', () => ir('festa', { id: f.id }), 'ghost') : null), () => ir('metricas')),
       h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
       seguidoresDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Seguidores no Insta nessa noite: ${fmtNum(seguidoresDe(sel_))}`) : null,
       membrosDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Membros do grupo no VRChat nessa noite: ${fmtNum(membrosDe(sel_))}`) : null,
