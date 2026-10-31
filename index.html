@@ -67,8 +67,15 @@ img { max-width: 100%; }
 .avatar.clicavel { cursor: pointer; transition: transform .2s; }
 .avatar.clicavel:hover { transform: scale(1.08); }
 .festa-logo { height: 120px; margin: 12px 0 4px; background: center / contain no-repeat; filter: drop-shadow(0 4px 14px rgba(0,0,0,.35)); }
-.vrcx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
-.vrcx-stat { background: var(--surface2, rgba(255,255,255,.04)); border-radius: 12px; padding: 10px 12px; }
+.vrcx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.vrcx-stat { --cor: #17d8c8; display: flex; align-items: center; gap: 12px; min-width: 0; background: var(--surface2, rgba(255,255,255,.04)); border-radius: 12px; padding: 12px; }
+.vrcx-stat.cor-b { --cor: #1fa3e6; }
+.vrcx-stat.cor-c { --cor: #ff4fb8; }
+.vrcx-stat.cor-d { --cor: #ffc24b; }
+.vrcx-stat.cor-e { --cor: #9b7bff; }
+.vrcx-ic { flex: none; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--cor); background: color-mix(in srgb, var(--cor) 16%, transparent); }
+.vrcx-ic svg { width: 21px; height: 21px; }
+.vrcx-txt { min-width: 0; }
 .vrcx-stat b { display: block; font-size: 24px; line-height: 1.1; }
 .vrcx-stat span { font-size: 12px; color: var(--muted); }
 .li.click { cursor: pointer; }
@@ -109,7 +116,8 @@ img { max-width: 100%; }
 .graf-legenda { display: flex; gap: 16px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .graf-legenda span::before { content: ''; display: inline-block; width: 12px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--a1); }
 .graf-legenda .l-insta::before { height: 3px; vertical-align: 3px; background: #ff4fb8; }
-.vrcx-graf svg { width: 100%; height: auto; max-height: 180px; display: block; }
+.graf-legenda .l-grupo::before { height: 3px; vertical-align: 3px; background: #ffc24b; }
+.vrcx-graf svg { width: 100%; height: auto; max-height: 240px; display: block; }
 .pessoa-chip { display: inline-flex; align-items: center; gap: 6px; }
 .shell > * { min-width: 0; }
 .main { min-width: 0; padding: 26px 34px 90px; max-width: 1180px; }
@@ -1557,10 +1565,14 @@ function ajudaVrcx() {
 const fmtNoite = (iso) => iso.split('-').reverse().join('/');
 function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+// cartão de número com ícone colorido; cor: a (turquesa), b (azul), c (rosa), d (âmbar), e (roxo)
+function stat(ic, n, t, cor) {
+  return h('div', { class: 'vrcx-stat cor-' + (cor || 'a') }, h('div', { class: 'vrcx-ic' }, icon(ic)), h('div', { class: 'vrcx-txt' }, h('b', {}, n), h('span', {}, t)));
+}
+
 // números, gráfico e frequentadores de uma noite do VRCX (usado na festa e na aba Métricas)
 function painelVrcx(v) {
   const pessoas = v.pessoas || [];
-  const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
   const inst = v.instancias || [];
   const filtro = S.vrcxFiltro || 'todos';
   const vis = pessoas.filter((p) => filtro === 'todos' || (filtro === 'novos' ? p.novo : p.vezes >= 3));
@@ -1569,8 +1581,8 @@ function painelVrcx(v) {
     h('div', { class: 'small muted' }, `${inst.length > 1 ? inst.map((x) => `${x.mundo} (${x.unicos})`).join(' + ') : v.mundo} · ${horaBR(v.inicio)} às ${horaBR(v.fim)}`),
     v.parcial ? h('div', { class: 'hint' }, 'Noite que o VRCX não gravou, registrada pelo ' + v.parcial + '. Por isso não tem pico, tempo médio nem gráfico de lotação.') : null,
     h('div', { class: 'vrcx-stats' },
-      stat(v.unicos, 'pessoas únicas'), v.parcial ? null : stat(v.pico, `pico às ${horaBR(v.picoEm)}`), v.parcial ? null : stat(fmtMin(v.tempoMedioMin || 0), 'tempo médio'),
-      stat(v.novos, '1ª vez numa festa'), stat(v.recorrentes, 'já tinham vindo')),
+      stat('equipe', v.unicos, 'pessoas únicas'), v.parcial ? null : stat('pico', v.pico, `pico às ${horaBR(v.picoEm)}`, 'b'), v.parcial ? null : stat('relogio', fmtMin(v.tempoMedioMin || 0), 'tempo médio', 'e'),
+      stat('novo', v.novos, '1ª vez numa festa', 'c'), stat('coracao', v.recorrentes, 'já tinham vindo', 'd')),
     graficoLotacao(v.serie || []),
     h('div', { class: 'section-title' }, 'Frequentadores'),
     abas([['todos', 'Todos', pessoas.length], ['novos', '1ª vez', pessoas.filter((p) => p.novo).length], ['fieis', 'Fiéis (3+ festas)', pessoas.filter((p) => p.vezes >= 3).length]],
@@ -1677,16 +1689,16 @@ VIEWS.metricas = function () {
   const fieis = [...todos.values()].sort((a, b) => b.noites - a.noites || b.minutos - a.minutos).slice(0, 15);
   const media = noites.length ? Math.round(noites.reduce((s, n) => s + n.unicos, 0) / noites.length) : 0;
   const maior = noites.length ? noites.reduce((a, b) => (b.unicos > a.unicos ? b : a)) : null;
-  const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
+  const ultMembros = noites.find((n) => membrosDe(n) !== null);
   return h('div', {},
     topo('Métricas', atualizar),
     h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Dados do VRCX gerados em ${fmtQuando(V.geradoEm)}. Cada festa junta as instâncias do grupo Many de uma noite (das 10h às 10h do dia seguinte). Para trazer festas novas, baixe a ferramenta, gere o arquivo no PC com o VRCX e clique em Enviar arquivo. Quando mais de uma pessoa envia a mesma noite, os dados são somados. Clique no lápis para dar nome a cada festa.`),
     h('div', { class: 'stack' },
       h('div', { class: 'card stack' },
-        h('div', { class: 'vrcx-stats' }, stat(noites.length, 'festas registradas'), stat(media, 'público médio'),
-          maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total'),
-          noites.find((n) => membrosDe(n) !== null) ? (() => { const u = noites.find((n) => membrosDe(n) !== null); return stat(fmtNum(membrosDe(u)), 'membros no grupo · ' + nomeNoite(u)); })() : null),
-        cruzamentoInsta(noites.slice().reverse(), stat),
+        h('div', { class: 'vrcx-stats' }, stat('festas', noites.length, 'festas registradas'), stat('metricas', media, 'público médio', 'b'),
+          maior ? stat('estrela', maior.unicos, 'maior público · ' + nomeNoite(maior), 'd') : null, stat('equipe', fmtNum(todos.size), 'pessoas diferentes no total', 'e'),
+          ultMembros ? stat('novo', fmtNum(membrosDe(ultMembros)), 'membros no grupo · ' + nomeNoite(ultMembros), 'd') : null),
+        cruzamentoInsta(noites.slice().reverse()),
         graficoFestas(noites.slice().reverse())),
       h('div', { class: 'card' }, h('h3', {}, 'Festas'), tabelaNoites(noites),
         apagadas.length ? h('div', { class: 'small muted', style: { marginTop: '10px' } },
@@ -1750,52 +1762,59 @@ function tabelaNoites(noites) {
 }
 
 // Insta x VRChat: seguidores ganhos entre as festas anotadas, comparados com o público delas
-function cruzamentoInsta(noites, stat) {
+function cruzamentoInsta(noites) {
   const com = noites.filter((n) => seguidoresDe(n) !== null);
   if (!com.length) return h('div', { class: 'hint' }, 'Anote os seguidores do Insta em cada festa (lápis) para cruzar com o público do VRChat.');
   const ult = com[com.length - 1];
-  if (com.length < 2) return h('div', { class: 'vrcx-stats' }, stat(fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult)));
+  if (com.length < 2) return h('div', { class: 'vrcx-stats' }, stat('insta', fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult), 'c'));
   const prim = com[0], ganho = seguidoresDe(ult) - seguidoresDe(prim);
   // público somado das festas depois da primeira anotada (é delas que vêm os seguidores ganhos)
   const publico = com.slice(1).reduce((s, n) => s + n.unicos, 0);
   const porFesta = Math.round(ganho / (com.length - 1));
   return h('div', { class: 'vrcx-stats' },
-    stat(fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult)),
-    stat((ganho >= 0 ? '+' : '') + fmtNum(ganho), 'seguidores desde ' + nomeNoite(prim)),
-    stat((porFesta >= 0 ? '+' : '') + fmtNum(porFesta), 'seguidores por festa, em média'),
-    stat(publico ? (Math.round((ganho / publico) * 1000) / 10).toLocaleString('pt-BR') : '—', 'novos seguidores a cada 100 pessoas no VRChat'));
+    stat('insta', fmtNum(seguidoresDe(ult)), 'seguidores no Insta · ' + nomeNoite(ult), 'c'),
+    stat('pico', (ganho >= 0 ? '+' : '') + fmtNum(ganho), 'seguidores desde ' + nomeNoite(prim), 'c'),
+    stat('festas', (porFesta >= 0 ? '+' : '') + fmtNum(porFesta), 'seguidores por festa, em média', 'c'),
+    stat('coracao', publico ? (Math.round((ganho / publico) * 1000) / 10).toLocaleString('pt-BR') : '—', 'novos seguidores a cada 100 pessoas no VRChat', 'c'));
 }
 
 // público (pessoas únicas) de cada festa, em ordem de data
 function graficoFestas(noites) {
   if (noites.length < 2) return null;
-  const max = Math.max(...noites.map((n) => n.unicos), 1), W = 600, H = 150, bw = W / noites.length;
+  const max = Math.max(...noites.map((n) => n.unicos), 1), W = 600, H = 190, bw = W / noites.length;
   const barras = noites.map((n, i) => {
     const alt = Math.max(2, (n.unicos / max) * (H - 34)), x = i * bw;
     return `<rect x="${(x + 3).toFixed(1)}" y="${(H - 16 - alt).toFixed(1)}" width="${Math.max(2, bw - 6).toFixed(1)}" height="${alt.toFixed(1)}" rx="3" fill="var(--a1)" data-i="${i}"></rect>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 20 - alt).toFixed(1)}" font-size="11" text-anchor="middle" fill="var(--muted)">${n.unicos}</text>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="var(--faint)">${fmtNoite(n.noite).slice(0, 5)}/${n.noite.slice(2, 4)}</text>`;
   }).join('');
-  // linha dos seguidores do Insta (escala própria, só nas festas que têm o número anotado)
-  const segs = noites.map(seguidoresDe), comSeg = segs.filter((x) => x !== null);
-  let linha = '';
-  if (comSeg.length) {
-    const lo = Math.min(...comSeg), hi = Math.max(...comSeg);
+  // linhas do Insta e do grupo: cada uma na própria escala, só nas festas que têm o número anotado
+  const segs = noites.map(seguidoresDe), mems = noites.map(membrosDe);
+  const linha = (vals, cor) => {
+    const com = vals.filter((x) => x !== null);
+    if (!com.length) return '';
+    const lo = Math.min(...com), hi = Math.max(...com);
     const y = (v) => (hi === lo ? 40 : 14 + (1 - (v - lo) / (hi - lo)) * (H - 60));
-    const pts = segs.map((v, i) => (v === null ? null : [i * bw + bw / 2, y(v)])).filter(Boolean);
-    linha = `<polyline points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="#ff4fb8" stroke-width="2.5" stroke-linejoin="round"/>` +
-      pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="#ff4fb8" stroke="var(--surface)" stroke-width="1.5"/>`).join('');
-  }
+    const pts = vals.map((v, i) => (v === null ? null : [i * bw + bw / 2, y(v)])).filter(Boolean);
+    return `<polyline points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="${cor}" stroke-width="2.5" stroke-linejoin="round"/>` +
+      pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="${cor}" stroke="var(--surface)" stroke-width="1.5"/>`).join('');
+  };
+  const temSeg = segs.some((x) => x !== null), temMem = mems.some((x) => x !== null);
+  const evolucao = (vals, i, rotulo) => {
+    const v = vals[i], ant = vals.slice(0, i).filter((x) => x !== null).pop();
+    return v !== null ? `${fmtNum(v)} ${rotulo}${ant !== undefined ? ` (${v - ant >= 0 ? '+' : ''}${fmtNum(v - ant)} desde a anterior)` : ''}` : `${rotulo}: não anotado`;
+  };
   const box = h('div', { class: 'vrcx-graf' });
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}${linha}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}${linha(segs, '#ff4fb8')}${linha(mems, '#ffc24b')}</svg>`;
   dicaGrafico(box, noites.length, (i) => {
-    const n = noites[i], s = segs[i];
-    const ant = segs.slice(0, i).filter((x) => x !== null).pop();
+    const n = noites[i];
     return [nomeNoite(n), `${fmtNoite(n.noite)} · ${n.unicos} pessoas no VRChat · pico ${n.pico ?? '—'}`,
-      s !== null ? `${fmtNum(s)} seguidores no Insta${ant !== undefined ? ` (${s - ant >= 0 ? '+' : ''}${fmtNum(s - ant)} desde a anterior)` : ''}` : 'seguidores no Insta: não anotado'];
+      evolucao(segs, i, 'seguidores no Insta'), evolucao(mems, i, 'membros no grupo')];
   }, (i) => ir('metricas', { noite: noites[i].noite }));
   const wrap = h('div', {}, box);
-  if (comSeg.length) wrap.appendChild(h('div', { class: 'graf-legenda' }, h('span', { class: 'l-vrc' }, 'pessoas no VRChat'), h('span', { class: 'l-insta' }, 'seguidores no Insta')));
+  wrap.appendChild(h('div', { class: 'graf-legenda' }, h('span', { class: 'l-vrc' }, 'pessoas no VRChat'),
+    temSeg ? h('span', { class: 'l-insta' }, 'seguidores no Insta') : null, temMem ? h('span', { class: 'l-grupo' }, 'membros do grupo') : null));
+  if (!temMem) wrap.appendChild(h('div', { class: 'hint', style: { marginTop: '8px' } }, 'Anote os membros do grupo em cada festa (lápis) para a linha aparecer aqui.'));
   return wrap;
 }
 
