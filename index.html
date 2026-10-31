@@ -2573,7 +2573,7 @@ function roteiroEditor(f, rot) {
         h('div', { class: 'grow' }, h('div', { class: 'small muted' }, 'Status do roteiro'), st),
         h('div', { style: { textAlign: 'right' } }, totalEl)),
       h('div', { class: 'row', style: { marginTop: '14px' } },
-        btn('Modo gravação', () => salvarPartes().then(() => modoGravacao(f, roteiroDa(f.id))), 'primary', 'play'),
+        btn('Modo gravação', () => { const w = janelaGravacao(); salvarPartes().then(() => modoGravacao(f, roteiroDa(f.id), w)); }, 'primary', 'play'),
         btn('Copiar texto', () => copiarTexto(textoCorrido({ partes })), '', 'copiar'),
         h('span', { class: 'grow' }),
         btn('Gerar tudo de novo', () => regerarTudo(f, rot), 'ghost', 'ia'))),
@@ -2600,8 +2600,15 @@ function regerarTudo(f, rot) {
   });
 }
 
-// Teleprompter: texto grande rolando sozinho, para gravar o vídeo
-function modoGravacao(f, rot) {
+// abre a janela já no clique: depois de esperar o servidor o navegador bloquearia o popup
+function janelaGravacao() {
+  const w = window.open('', 'many-gravacao', 'popup,width=1000,height=720');
+  if (!w) toast('O navegador bloqueou a janela nova. Abrindo aqui mesmo.', 'err');
+  return w;
+}
+// Teleprompter: texto grande rolando sozinho, para gravar o vídeo (na janela w; sem ela, por cima da página)
+function modoGravacao(f, rot, w) {
+  const alvo = w || window, doc = alvo.document;
   let tamanho = 40, velocidade = 30, rodando = false, ultimo = 0, timer = 0, resto = 0;
   const texto = h('div', { style: { maxWidth: '900px', margin: '0 auto', padding: '40vh 24px 70vh', lineHeight: '1.45', fontWeight: 600 } },
     partesIncluidas(rot).map((p) => h('div', { style: { marginBottom: '1.2em' } },
@@ -2624,15 +2631,15 @@ function modoGravacao(f, rot) {
     rodando = !rodando; ultimo = 0;
     bPlay.lastChild.textContent = rodando ? 'Pausar' : 'Rolar';
     bPlay.firstChild.replaceWith(icon(rodando ? 'pausa' : 'play'));
-    clearInterval(timer);
-    if (rodando) timer = setInterval(passo, 30);
+    alvo.clearInterval(timer);
+    if (rodando) timer = alvo.setInterval(passo, 30);
   });
   const info = h('span', { class: 'small muted' });
   const mostrar = () => { info.textContent = `letra ${tamanho} · velocidade ${velocidade}`; };
   mostrar();
-  const fechar = () => { rodando = false; clearInterval(timer); ov.remove(); document.removeEventListener('keydown', tecla); };
+  const fechar = () => { rodando = false; alvo.clearInterval(timer); doc.removeEventListener('keydown', tecla); if (w) w.close(); else ov.remove(); };
   const tecla = (e) => { if (e.key === 'Escape') fechar(); if (e.key === ' ') { e.preventDefault(); bPlay.click(); } };
-  document.addEventListener('keydown', tecla);
+  doc.addEventListener('keydown', tecla);
   const barra = h('div', { class: 'row', style: { position: 'absolute', left: '0', right: '0', bottom: '0', padding: '12px 16px', background: 'rgba(9,10,19,.92)', borderTop: '1px solid var(--line)', justifyContent: 'center' } },
     bPlay,
     btn('Mais devagar', () => { velocidade = Math.max(5, velocidade - 5); mostrar(); }, 'sm'),
@@ -2646,7 +2653,15 @@ function modoGravacao(f, rot) {
     }, 'sm') : null,
     btn('Fechar', fechar, 'sm ghost', 'x'));
   const ov = h('div', { style: { position: 'fixed', inset: '0', zIndex: 70, background: '#000', color: '#fff' } }, rolo, barra);
-  document.body.appendChild(ov);
+  if (!w) { document.body.appendChild(ov); return; }
+  doc.documentElement.className = document.documentElement.className;
+  Array.from(document.documentElement.attributes).forEach((a) => doc.documentElement.setAttribute(a.name, a.value));
+  doc.head.replaceChildren(...Array.from(document.querySelectorAll('style, link[rel=stylesheet]')).map((n) => doc.importNode(n, true)));
+  doc.title = 'Gravação: ' + f.nome;
+  doc.body.style.margin = '0';
+  doc.body.style.background = '#000';
+  doc.body.replaceChildren(ov);
+  w.focus();
 }
 
 function cardChaveFotos() {
