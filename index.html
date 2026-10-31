@@ -1692,15 +1692,19 @@ function mediaNoite(n) {
   return notas.length ? notas.reduce((s, x) => s + x, 0) / notas.length : null;
 }
 const fmtMedia = (x) => x.toFixed(1).replace('.', ',');
+function textoMedia(n) {
+  const qtd = Object.keys((registroNoite(n.noite) || {}).avaliacoes || {}).length, media = mediaNoite(n);
+  return media === null ? 'ninguém avaliou ainda' : `média ${fmtMedia(media)} · ${qtd} ${qtd === 1 ? 'avaliação' : 'avaliações'}`;
+}
 // estrelas da festa: cada pessoa da equipe dá a sua nota (clicar na mesma estrela tira) e aparece a média de todos
 function cardAvaliacao(n) {
-  const notas = (registroNoite(n.noite) || {}).avaliacoes || {}, qtd = Object.keys(notas).length, media = mediaNoite(n);
+  const notas = (registroNoite(n.noite) || {}).avaliacoes || {};
   const estr = estrelas(notas[S.me.email] || 0, async (v) => {
     const r = await run('avaliarNoite', { noite: n.noite, nota: v });
     upsert('noitesMetricas', r.salvo); render();
   });
   return h('div', { class: 'card row' }, h('h3', { class: 'grow', style: { margin: 0 } }, 'Avaliação da festa'), estr,
-    h('span', { class: 'small muted' }, media === null ? 'ninguém avaliou ainda' : `média ${fmtMedia(media)} · ${qtd} ${qtd === 1 ? 'avaliação' : 'avaliações'}`));
+    h('span', { class: 'small muted' }, textoMedia(n)));
 }
 function membrosDe(n) { const r = registroNoite(n.noite); return r && r.membrosGrupo ? Number(r.membrosGrupo) : null; }
 const fmtNum = (x) => Number(x).toLocaleString('pt-BR');
@@ -1709,14 +1713,23 @@ function renomearNoite(n) {
   const nome = inp({ value: nomeNoite(n), placeholder: 'Ex.: Halloween 2025' });
   const seg = inp({ type: 'number', min: 0, value: seguidoresDe(n) || '', placeholder: 'Ex.: 1250' });
   const mem = inp({ type: 'number', min: 0, value: membrosDe(n) || '', placeholder: 'Ex.: 800' });
+  const minhaNota = ((r || {}).avaliacoes || {})[S.me.email] || 0;
+  const estr = estrelas(minhaNota);
   const m = modal({
     titulo: 'Editar festa',
     corpo: h('div', { class: 'stack' }, campo('Nome', nome, { hint: `Noite de ${fmtNoite(n.noite)} · ${n.mundo}` }),
       campo('Seguidores no Insta', seg, { hint: 'Quantos seguidores o Insta do Many tinha na noite da festa. Ele é cruzado com o público do VRChat nos dados gerais.' }),
-      campo('Membros do grupo no VRChat', mem, { hint: 'Quantos membros o grupo do Many tinha na noite da festa (aparece na página do grupo).' })),
+      campo('Membros do grupo no VRChat', mem, { hint: 'Quantos membros o grupo do Many tinha na noite da festa (aparece na página do grupo).' }),
+      h('div', { class: 'f' }, h('span', { class: 'small muted' }, 'Sua avaliação da festa'),
+        h('div', { class: 'row' }, estr, h('span', { class: 'small muted' }, textoMedia(n))))),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Salvar', async () => {
       const dados = { noite: n.noite, nome: nome.value.trim(), seguidoresInsta: seg.value === '' ? null : Math.round(Number(seg.value)), membrosGrupo: mem.value === '' ? null : Math.round(Number(mem.value)) };
-      if (r) dados.id = r.id;
+      if (estr.valor() !== minhaNota) {
+        await filaSalvar;
+        upsert('noitesMetricas', (await run('avaliarNoite', { noite: n.noite, nota: estr.valor() })).salvo);
+      }
+      const atual = registroNoite(n.noite);
+      if (atual) dados.id = atual.id;
       await salvar('noitesMetricas', dados);
       m.fechar(); toast('Festa salva', 'ok'); render();
     }, 'primary')]
