@@ -1794,24 +1794,26 @@ function graficoFestas(noites) {
       `<text x="${(x + bw / 2).toFixed(1)}" y="${(H - 20 - alt).toFixed(1)}" font-size="11" text-anchor="middle" fill="var(--muted)">${n.unicos}</text>` +
       `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="var(--faint)">${fmtNoite(n.noite).slice(0, 5)}/${n.noite.slice(2, 4)}</text>`;
   }).join('');
-  // linhas do Insta e do grupo: cada uma na própria escala, só nas festas que têm o número anotado
+  // linhas do Insta e do grupo: cada uma na própria escala, só nas festas que têm o número anotado.
+  // As duas costumam subir juntas: com ambas no gráfico, cada uma fica na sua faixa (Insta em cima, grupo embaixo)
   const segs = noites.map(seguidoresDe), mems = noites.map(membrosDe);
-  const linha = (vals, cor) => {
+  const linha = (vals, cor, topo, altura) => {
     const com = vals.filter((x) => x !== null);
     if (!com.length) return '';
     const lo = Math.min(...com), hi = Math.max(...com);
-    const y = (v) => (hi === lo ? 40 : 14 + (1 - (v - lo) / (hi - lo)) * (H - 60));
+    const y = (v) => topo + (hi === lo ? altura / 2 : (1 - (v - lo) / (hi - lo)) * altura);
     const pts = vals.map((v, i) => (v === null ? null : [i * bw + bw / 2, y(v)])).filter(Boolean);
     return `<polyline points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="${cor}" stroke-width="2.5" stroke-linejoin="round"/>` +
       pts.map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="${cor}" stroke="var(--surface)" stroke-width="1.5"/>`).join('');
   };
   const temSeg = segs.some((x) => x !== null), temMem = mems.some((x) => x !== null);
+  const faixa = temSeg && temMem ? [[14, 52], [88, 52]] : [[14, H - 60], [14, H - 60]];
   const evolucao = (vals, i, rotulo) => {
     const v = vals[i], ant = vals.slice(0, i).filter((x) => x !== null).pop();
     return v !== null ? `${fmtNum(v)} ${rotulo}${ant !== undefined ? ` (${v - ant >= 0 ? '+' : ''}${fmtNum(v - ant)} desde a anterior)` : ''}` : `${rotulo}: não anotado`;
   };
   const box = h('div', { class: 'vrcx-graf' });
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}${linha(segs, '#ff4fb8')}${linha(mems, '#ffc24b')}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${barras}${linha(segs, '#ff4fb8', ...faixa[0])}${linha(mems, '#ffc24b', ...faixa[1])}</svg>`;
   dicaGrafico(box, noites.length, (i) => {
     const n = noites[i];
     return [nomeNoite(n), `${fmtNoite(n.noite)} · ${n.unicos} pessoas no VRChat · pico ${n.pico ?? '—'}`,
