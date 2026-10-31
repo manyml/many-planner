@@ -1552,8 +1552,7 @@ function cardVrcx(f, m) {
 }
 
 function ajudaVrcx() {
-  return h('div', { class: 'hint' }, 'No PC com o VRCX, rode ', h('code', {}, 'node vrcx/metricas.mjs'),
-    ' (ou peça ao Claude "importar métricas do VRCX"). Só entra o que aconteceu enquanto essa pessoa estava na instância.');
+  return h('div', { class: 'hint' }, 'Na aba Métricas, baixe a ferramenta Many VRCX, gere o arquivo no PC com o VRCX e clique em Enviar arquivo. Só entra o que aconteceu enquanto essa pessoa estava na instância.');
 }
 const fmtNoite = (iso) => iso.split('-').reverse().join('/');
 function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1584,6 +1583,19 @@ function painelVrcx(v) {
 }
 
 // ---------- aba Métricas: todas as noites de festa do grupo Many vistas pelo VRCX ----------
+// arquivo gerado pela ferramenta Many VRCX: cada pessoa da equipe manda o seu e o servidor junta com o resto
+const URL_MANY_VRCX = 'https:' + String.fromCharCode(47, 47) + 'github.com/manyml/many-vrcx/releases/latest/download/ManyVRCX.exe';
+async function enviarArquivoVrcx() {
+  const f = await escolherArquivo('.json,application/json');
+  if (!f) return;
+  if (f.size > 10 * 1024 * 1024) { toast('Arquivo maior que 10 MB', 'err'); return; }
+  let arquivo;
+  try { arquivo = JSON.parse(await f.text()); } catch (e) { toast('Esse arquivo não é da ferramenta Many VRCX', 'err'); return; }
+  const r = await run('enviarVrcx', { arquivo });
+  S.vrcx = r.dados;
+  toast(`${r.total} festa(s) recebida(s)` + (r.novas ? `, ${r.novas} nova(s)` : ''), 'ok');
+  render();
+}
 function carregarVrcx(forcar) {
   if (S.vrcx && !forcar) return;
   S.vrcx = { carregando: true, noites: [] };
@@ -1611,17 +1623,20 @@ async function restaurarNoite(n) {
 }
 
 function seguidoresDe(n) { const r = registroNoite(n.noite); return r && r.seguidoresInsta ? Number(r.seguidoresInsta) : null; }
+function membrosDe(n) { const r = registroNoite(n.noite); return r && r.membrosGrupo ? Number(r.membrosGrupo) : null; }
 const fmtNum = (x) => Number(x).toLocaleString('pt-BR');
 function renomearNoite(n) {
   const r = registroNoite(n.noite);
   const nome = inp({ value: nomeNoite(n), placeholder: 'Ex.: Halloween 2025' });
   const seg = inp({ type: 'number', min: 0, value: seguidoresDe(n) || '', placeholder: 'Ex.: 1250' });
+  const mem = inp({ type: 'number', min: 0, value: membrosDe(n) || '', placeholder: 'Ex.: 800' });
   const m = modal({
     titulo: 'Editar festa',
     corpo: h('div', { class: 'stack' }, campo('Nome', nome, { hint: `Noite de ${fmtNoite(n.noite)} · ${n.mundo}` }),
-      campo('Seguidores no Insta', seg, { hint: 'Quantos seguidores o Insta do Many tinha na noite da festa. Ele é cruzado com o público do VRChat nos dados gerais.' })),
+      campo('Seguidores no Insta', seg, { hint: 'Quantos seguidores o Insta do Many tinha na noite da festa. Ele é cruzado com o público do VRChat nos dados gerais.' }),
+      campo('Membros do grupo no VRChat', mem, { hint: 'Quantos membros o grupo do Many tinha na noite da festa (aparece na página do grupo).' })),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Salvar', async () => {
-      const dados = { noite: n.noite, nome: nome.value.trim(), seguidoresInsta: seg.value === '' ? null : Math.round(Number(seg.value)) };
+      const dados = { noite: n.noite, nome: nome.value.trim(), seguidoresInsta: seg.value === '' ? null : Math.round(Number(seg.value)), membrosGrupo: mem.value === '' ? null : Math.round(Number(mem.value)) };
       if (r) dados.id = r.id;
       await salvar('noitesMetricas', dados);
       m.fechar(); toast('Festa salva', 'ok'); render();
@@ -1633,7 +1648,8 @@ function renomearNoite(n) {
 VIEWS.metricas = function () {
   carregarVrcx();
   const V = S.vrcx;
-  const atualizar = btn('Atualizar', () => carregarVrcx(true), '', 'download');
+  const atualizar = h('div', { class: 'row' }, h('a', { class: 'btn ghost', href: URL_MANY_VRCX, target: '_blank', rel: 'noopener' }, icon('download'), 'Baixar ferramenta'),
+    btn('Enviar arquivo', enviarArquivoVrcx, 'primary', 'upload'), btn('Atualizar', () => carregarVrcx(true), ''));
   if (V.carregando) return h('div', {}, topo('Métricas', atualizar), h('div', { class: 'loading' }, h('span', { class: 'spin' }), 'Lendo os dados do VRCX…'));
   if (V.erro) return h('div', {}, topo('Métricas', atualizar), vazio('Não deu para ler os dados', V.erro));
   const todasNoites = V.noites.slice().sort((a, b) => b.noite.localeCompare(a.noite));
@@ -1649,6 +1665,7 @@ VIEWS.metricas = function () {
         f ? btn('Abrir festa', () => ir('festa', { id: f.id, aba: 'metricas' }), 'ghost') : null), () => ir('metricas')),
       h('div', { class: 'muted', style: { marginTop: '-10px', marginBottom: '16px' } }, fmtDataLonga(sel_.noite)),
       seguidoresDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Seguidores no Insta nessa noite: ${fmtNum(seguidoresDe(sel_))}`) : null,
+      membrosDe(sel_) ? h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Membros do grupo no VRChat nessa noite: ${fmtNum(membrosDe(sel_))}`) : null,
       h('div', { class: 'card' }, painelVrcx(sel_)));
   }
   // resumo geral
@@ -1663,12 +1680,12 @@ VIEWS.metricas = function () {
   const stat = (n, t) => h('div', { class: 'vrcx-stat' }, h('b', {}, n), h('span', {}, t));
   return h('div', {},
     topo('Métricas', atualizar),
-    h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Dados do VRCX gerados em ${fmtQuando(V.geradoEm)}. Cada festa junta as instâncias do grupo Many de uma noite (das 10h às 10h do dia seguinte). Para trazer festas novas, rode `,
-      h('code', {}, 'node vrcx/metricas.mjs'), ' no PC e clique em Atualizar. Clique no lápis para dar nome a cada festa.'),
+    h('div', { class: 'hint', style: { marginBottom: '12px' } }, `Dados do VRCX gerados em ${fmtQuando(V.geradoEm)}. Cada festa junta as instâncias do grupo Many de uma noite (das 10h às 10h do dia seguinte). Para trazer festas novas, baixe a ferramenta, gere o arquivo no PC com o VRCX e clique em Enviar arquivo. Quando mais de uma pessoa envia a mesma noite, os dados são somados. Clique no lápis para dar nome a cada festa.`),
     h('div', { class: 'stack' },
       h('div', { class: 'card stack' },
         h('div', { class: 'vrcx-stats' }, stat(noites.length, 'festas registradas'), stat(media, 'público médio'),
-          maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total')),
+          maior ? stat(maior.unicos, 'maior público · ' + nomeNoite(maior)) : null, stat(todos.size, 'pessoas diferentes no total'),
+          noites.find((n) => membrosDe(n) !== null) ? (() => { const u = noites.find((n) => membrosDe(n) !== null); return stat(fmtNum(membrosDe(u)), 'membros no grupo · ' + nomeNoite(u)); })() : null),
         cruzamentoInsta(noites.slice().reverse(), stat),
         graficoFestas(noites.slice().reverse())),
       h('div', { class: 'card' }, h('h3', {}, 'Festas'), tabelaNoites(noites),
