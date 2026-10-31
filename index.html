@@ -159,7 +159,7 @@ img { max-width: 100%; }
 .chip.x { cursor: pointer; }
 .chip.x:hover { border-color: var(--danger); color: var(--danger); }
 .chip.on { background: rgba(23, 216, 200, .12); border-color: rgba(23, 216, 200, .45); color: var(--a1); }
-.st-Ideia { color: #b9a5ff; border-color: #4a3b8f; }
+.st-Ideia, .st-Plano { color: #b9a5ff; border-color: #4a3b8f; }
 .st-Planejando { color: #7cc8ff; border-color: #24547a; }
 .st-Confirmada { color: var(--a1); border-color: #136d66; }
 .st-Divulgada { color: #ffd36b; border-color: #7a5f1c; }
@@ -185,7 +185,7 @@ img { max-width: 100%; }
 .esc-add svg { width: 14px; height: 14px; }
 .esc-add select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
 @media (max-width: 560px) { .esc-linha { grid-template-columns: 1fr; gap: 6px; } }
-.detalhes { border-top: 1px solid var(--line); padding-top: 12px; }
+.detalhes { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .detalhes summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: 13px; }
 .detalhes summary::-webkit-details-marker { display: none; }
 .detalhes summary svg { flex: none; width: 15px; height: 15px; color: var(--muted); transform: rotate(180deg); transition: transform .15s; }
@@ -370,6 +370,7 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--a1); curso
 .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: var(--r-sm); overflow: hidden; }
 .seg button { border: 0; background: none; color: var(--muted); padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .seg button.on { background: rgba(23, 216, 200, .14); color: var(--a1); }
+.seg-status button.on { background: color-mix(in srgb, currentColor 14%, transparent); }
 .cal-topo { margin-bottom: 10px; gap: 8px; }
 .cal-mes { margin: 0; min-width: 170px; text-align: center; }
 .cal-mes::first-letter { text-transform: uppercase; }
@@ -1270,7 +1271,7 @@ function novaFesta(pre) {
       campo('Tema', tema, { full: true, hint: 'O checklist padrão é criado automaticamente com prazos a partir da data.' })),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Criar festa', async () => {
       if (!nome.value.trim() || !data.value) { toast('Preencha nome e data', 'err'); return; }
-      const f = await salvar('festas', { nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: tema.value, status: 'Ideia', djIds: [] });
+      const f = await salvar('festas', { nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: tema.value, status: 'Plano', djIds: [] });
       m.fechar(); toast('Festa criada com checklist', 'ok'); ir('festa', { id: f.id });
     }, 'primary')]
   });
@@ -1324,11 +1325,12 @@ VIEWS.festa = function () {
   const aba = S.rota.aba || 'geral';
   const pr = progresso(f.id), tema = temaDe(f);
   const nAtiv = lista('atividades').filter((a) => a.festaId === f.id).length;
-  const stSel = sel(S.consts.statusFesta, f.status, { style: { width: 'auto' }, onchange: async () => { await salvar('festas', { id: f.id, status: stSel.value }); render(); } });
+  const stBotoes = h('div', { class: 'seg seg-status' }, S.consts.statusFesta.map((st) =>
+    h('button', { type: 'button', class: st === f.status ? 'on st-' + st : '', onclick: async () => { if (st !== f.status) { await salvar('festas', { id: f.id, status: st }); render(); } } }, st)));
   const corpo = { geral: festaGeral, atividades: festaAtividades, roteiro: festaRoteiro, artes: festaArtes, checklist: festaChecklist, historico: festaHistorico }[aba] || festaGeral;
   const rot = roteiroDa(f.id);
   return h('div', {},
-    topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stSel), () => ir('festas')),
+    topo(f.nome, h('div', { class: 'row' }, btn('Duplicar', () => duplicarFesta(f), 'sm', 'copiar'), stBotoes), () => ir('festas')),
     h('div', { class: 'row muted', style: { marginTop: '-10px', marginBottom: '16px' } }, h('span', {}, fmtDataLonga(f.data)), parHorario(f), tema ? h('span', { class: 'chip' }, tema.nome) : null),
     h('div', { class: 'tabs-linha' },
       abas([['geral', 'Geral'], ['atividades', 'Atividades', nAtiv], ['roteiro', 'Roteiro', rot ? rot.status : null], ['artes', 'Artes', pedidosDa(f.id).length ? 'v' + pedidosDa(f.id)[0].versao : null], ['checklist', 'Checklist', `${pr.feitas}/${pr.total}`]],
@@ -1406,12 +1408,12 @@ function festaGeral(f) {
 
   return h('div', { class: 'stack' },
     h('div', { class: 'card' }, h('div', { class: 'form' },
+      detalhes,
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'DJs da festa'), djBox),
       h('div', { class: 'f full' }, h('span', { class: 'small muted' }, 'Mapa do VRChat'),
         h('div', { class: 'row' }, h('div', { class: 'grow' }, mapaSel), btn('Sugerir mapas', buscarMapas, 'sm', 'busca')),
         mapaAtual ? h('div', { class: 'row small', style: { marginTop: '6px' } }, chipStatus(mapaAtual.status), mapaAtual.capacidade ? `cap. ${mapaAtual.capacidade}` : null,
-          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null),
-      detalhes)),
+          h('a', { href: linkVRChat(mapaAtual.worldId), target: '_blank' }, 'abrir no site ↗'), botaoJogo(mapaAtual.worldId, 'Abrir no jogo')) : null))),
     blocoEscala(f),
     h('div', { class: 'row end' }, btn('Excluir festa', async () => { if (await excluir('festas', f.id, f.nome)) ir('festas'); }, 'ghost danger'), btn('Salvar', salvarTudo, 'primary')));
 }
@@ -3340,7 +3342,7 @@ function duplicarFesta(f) {
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Duplicar', async () => {
       if (!nome.value.trim() || !data.value) { toast('Preencha nome e data', 'err'); return; }
       const dif = Math.round((dt(data.value) - dt(f.data)) / 86400000);
-      const nova = await salvar('festas', { nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: '', status: 'Ideia', djIds: (f.djIds || []).slice() });
+      const nova = await salvar('festas', { nome: nome.value.trim(), data: data.value, horaBR: horaI.value, temaId: '', status: 'Plano', djIds: (f.djIds || []).slice() });
       for (const a of ativs) {
         await salvar('atividades', { festaId: nova.id, tipoId: a.tipoId, titulo: a.titulo, regras: a.regras, premios: a.premios,
           prazo: a.prazo ? somarDias(a.prazo, dif) : '', canal: a.canal, paginas: a.paginas });
