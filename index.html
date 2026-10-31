@@ -2642,7 +2642,7 @@ function modoGravacao(f, rot, w) {
   doc.documentElement.className = document.documentElement.className;
   Array.from(document.documentElement.attributes).forEach((a) => doc.documentElement.setAttribute(a.name, a.value));
   doc.head.replaceChildren(...Array.from(document.querySelectorAll('style, link[rel=stylesheet]')).map((n) => doc.importNode(n, true)));
-  doc.title = 'Gravação: ' + f.nome;
+  doc.title = '- Gravação: ' + f.nome;
   doc.body.style.margin = '0';
   doc.body.style.background = '#000';
   doc.body.replaceChildren(ov);
