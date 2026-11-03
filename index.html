@@ -2082,7 +2082,8 @@ function temasBanco() {
     h('div', { class: 'row' }, h('h3', { class: 'grow', style: { margin: 0 } }, t.nome), h('div', { class: 'swatches' }, (t.paleta || []).map((c) => h('i', { style: { background: c } })))),
     t.descricao ? h('div', { class: 'small muted', style: { margin: '8px 0', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } }, t.descricao) : null,
     h('div', { class: 'row', style: { marginTop: '8px' } }, (t.tags || []).map((x) => h('span', { class: 'chip' }, x))),
-    h('div', { class: 'small faint', style: { marginTop: '10px' } }, `${(t.refs || []).length} referência(s) · usado em ${uso(t.id)} festa(s)`))))
+    h('div', { class: 'row small faint', style: { marginTop: '10px' } }, h('span', { class: 'grow' }, `${(t.refs || []).length} referência(s) · usado em ${uso(t.id)} festa(s)`),
+      t.criadoPor ? h('span', { title: 'Criado por' }, pessoaChip(t.criadoPor)) : null))))
     : vazio('Nenhum tema no banco', 'Crie a partir das sugestões ou do zero.', btn('Novo tema', () => editarTema(null, () => render()), 'primary', 'plus'));
 }
 
