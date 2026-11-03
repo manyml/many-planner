@@ -2055,7 +2055,7 @@ function secaoForaDaCaixa() {
   wrap.appendChild(secao('Fora da caixinha', h('div', { class: 'row' }, bSortear, S.ia && S.ia.configurada ? bIA : null)));
   if (S.ia && S.ia.configurada) wrap.appendChild(dica);
   wrap.appendChild(grade);
-  wrap.appendChild(h('div', { class: 'hint' }, 'Temas que não dependem de data: sorteados de um banco com dezenas de ideias' + (S.ia && S.ia.configurada ? ' ou criados na hora pela IA.' : '. Com a chave do Gemini, a IA também cria ideias novas.') + ' "Virar ideia" manda para a votação da equipe.'));
+  wrap.appendChild(h('div', { class: 'hint' }, 'Temas que não dependem de data: sorteados de um banco com dezenas de ideias' + (S.ia && S.ia.configurada ? ' ou criados na hora pela IA.' : '. Com a chave da IA (Gemini ou Groq), ela também cria ideias novas.') + ' "Virar ideia" manda para a votação da equipe.'));
   if (S.foraCaixa) desenhar(); else carregar(false);
   return wrap;
 }
@@ -2545,7 +2545,7 @@ VIEWS.roteiros = function () {
 
 function avisoIA() {
   return h('div', { class: 'card', style: { borderColor: 'var(--warn)', marginBottom: '14px' } },
-    h('b', {}, 'A IA ainda não está configurada. '), 'Para gerar roteiros, coloque a chave do Gemini em ',
+    h('b', {}, 'A IA ainda não está configurada. '), 'Para gerar roteiros, coloque a chave do Gemini ou do Groq em ',
     h('a', { href: '#', onclick: (e) => { e.preventDefault(); ir('equipe', { aba: 'ia' }); } }, 'Equipe e ajustes → IA e roteiros'), '.');
 }
 
@@ -2759,30 +2759,38 @@ function cardChaveFotos() {
       }, 'primary')));
 }
 
+// card de uma chave de IA (Gemini ou Groq): passos para criar, campo e remover
+function cardChaveIA(qual, titulo, passos, placeholder, aviso) {
+  const tem = S.ia[qual];
+  const chave = inp({ type: 'password', placeholder: tem ? 'chave salva (cole uma nova para trocar)' : placeholder, autocomplete: 'off' });
+  const salvarChave = async (valor) => { Object.assign(S.ia, await run('salvarChaveIA', { chave: valor, qual })); render(); };
+  return h('div', { class: 'card' },
+    h('h3', {}, titulo),
+    h('div', { class: 'row', style: { marginBottom: '10px' } }, tem ? h('span', { class: 'chip st-Realizada' }, 'configurada') : h('span', { class: 'chip st-Cancelada' }, 'não configurada')),
+    h('ol', { class: 'small muted', style: { marginTop: 0, paddingLeft: '20px' } }, passos.map((x) => h('li', {}, x))),
+    h('div', { class: 'row' }, h('div', { class: 'grow' }, chave),
+      btn('Salvar chave', async () => { if (chave.value.trim()) { await salvarChave(chave.value.trim()); toast('Chave salva', 'ok'); } }, 'primary'),
+      tem ? btn('Remover', async () => { if (await confirmar(aviso, 'Remover')) await salvarChave(''); }, 'ghost danger') : null));
+}
+
 function ajustesIA() {
-  const chave = inp({ type: 'password', placeholder: S.ia.configurada ? 'chave salva (cole uma nova para trocar)' : 'cole aqui a chave (começa com AIza…)', autocomplete: 'off' });
   const campoAjuste = (k, rotulo, el, hint) => {
     el.value = ajusteVal(k);
     const b = btn('Salvar', async () => { const r = await run('salvarAjuste', { chave: k, valor: el.value }); upsert('ajustes', r.salvo); toast('Salvo', 'ok'); }, 'sm');
     return h('div', { class: 'f full' }, h('div', { class: 'row' }, h('span', { class: 'small muted grow' }, rotulo), b), el, hint ? h('span', { class: 'hint' }, hint) : null);
   };
   return h('div', { class: 'stack' },
-    h('div', { class: 'card' },
-      h('h3', {}, 'Chave do Gemini (IA do Google)'),
-      h('div', { class: 'row', style: { marginBottom: '10px' } }, S.ia.configurada ? h('span', { class: 'chip st-Realizada' }, 'configurada') : h('span', { class: 'chip st-Cancelada' }, 'não configurada')),
-      h('ol', { class: 'small muted', style: { marginTop: 0, paddingLeft: '20px' } },
-        h('li', {}, 'Abra o ', h('a', { href: url('aistudio.google.com/apikey'), target: '_blank' }, 'Google AI Studio'), ' logado na conta do Many.'),
-        h('li', {}, 'Clique em "Create API key" (criar chave) e copie.'),
-        h('li', {}, 'Cole aqui e salve. A chave fica guardada no servidor do app, não na planilha.')),
-      h('div', { class: 'row' }, h('div', { class: 'grow' }, chave),
-        btn('Salvar chave', async () => {
-          if (!chave.value.trim()) return;
-          const r = await run('salvarChaveIA', { chave: chave.value.trim() }); S.ia.configurada = r.configurada; toast('Chave salva', 'ok'); render();
-        }, 'primary'),
-        S.ia.configurada ? btn('Remover', async () => {
-          if (!(await confirmar('Remover a chave do Gemini? Os roteiros param de ser gerados até colocar outra.', 'Remover'))) return;
-          const r = await run('salvarChaveIA', { chave: '' }); S.ia.configurada = r.configurada; render();
-        }, 'ghost danger') : null)),
+    h('div', { class: 'hint' }, 'A IA escreve roteiros, ideias de tema, cores e prompts. Com as duas chaves, o app usa o Gemini e passa para o Groq quando o Gemini recusar.'),
+    cardChaveIA('gemini', 'Chave do Gemini (IA do Google)', [
+      ['Abra o ', h('a', { href: url('aistudio.google.com/apikey'), target: '_blank' }, 'Google AI Studio'), ' logado na conta do Many.'],
+      'Clique em "Create API key" (criar chave) e copie.',
+      'Cole aqui e salve. A chave fica guardada no servidor do app, não na planilha.'], 'cole aqui a chave (começa com AIza…)',
+      'Remover a chave do Gemini?' + (S.ia.groq ? ' O app passa a usar só o Groq.' : ' A IA para de funcionar até colocar outra.')),
+    cardChaveIA('groq', 'Chave do Groq (reserva gratuita)', [
+      ['Abra o ', h('a', { href: url('console.groq.com/keys'), target: '_blank' }, 'Groq Console'), ' e entre com a conta do Many (não pede cartão).'],
+      'Clique em "Create API Key", dê um nome (ex.: Many Planner) e copie.',
+      'Cole aqui e salve.'], 'cole aqui a chave (começa com gsk_…)',
+      'Remover a chave do Groq?' + (S.ia.gemini ? ' O app passa a usar só o Gemini.' : ' A IA para de funcionar até colocar outra.')),
     cardChaveFotos(),
     h('div', { class: 'card' }, h('h3', {}, 'Padrões dos roteiros'),
       h('div', { class: 'form' },
@@ -2791,7 +2799,8 @@ function ajustesIA() {
         campoAjuste('tom', 'Tom de voz', area('', { style: { minHeight: '64px' } })),
         campoAjuste('exemplos', 'Roteiros antigos (exemplos de estilo)', area('', { style: { minHeight: '220px' }, placeholder: 'Cole aqui roteiros que você já gravou. Separe um do outro com uma linha só com ---' }),
           'A IA imita o jeito de falar, o ritmo e as expressões, sem copiar o conteúdo.'),
-        campoAjuste('modeloIA', 'Modelo do Gemini', inp({}), 'Padrão: gemini-3.8-flash. Se ele for desativado, o app usa gemini-flash-latest sozinho.'))));
+        campoAjuste('modeloIA', 'Modelo do Gemini', inp({}), 'Padrão: gemini-3.8-flash. Se ele for desativado, o app usa gemini-flash-latest sozinho.'),
+        campoAjuste('modeloGroq', 'Modelo do Groq', inp({ placeholder: 'openai/gpt-oss-120b' }), 'Vazio = openai/gpt-oss-120b. Se ele sair do ar, o app usa llama-3.3-70b-versatile sozinho.'))));
 }
 
 // ---------- Artes ----------
