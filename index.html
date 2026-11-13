@@ -152,6 +152,8 @@ img { max-width: 100%; }
 .card.click { cursor: pointer; transition: border-color .15s, transform .15s; }
 .card.click:hover { border-color: var(--a2); transform: translateY(-1px); }
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.hub-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.hub-prev { height: 240px; max-width: 100%; margin: 0 auto; border-radius: var(--r-sm); background: #0c0e1f center / cover no-repeat; border: 1px solid var(--line); }
 .grid.cols2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
@@ -561,6 +563,7 @@ const ICONS = {
   equipe: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   lixeira: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
   metricas: '<path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/>',
+  hub: '<path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
   relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   pico: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   novo: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/>',
@@ -941,7 +944,11 @@ async function preCarregarImagens() {
   faltam.forEach((id) => { thumbEspera[id] = []; });
   enfileirarThumbs(faltam, false);
 }
-function agendarPreCarga() { setTimeout(() => { preCarregarImagens().catch(() => { }); }, 1500); }
+function agendarPreCarga() {
+  setTimeout(() => { preCarregarImagens().catch(() => { }); }, 1500);
+  // imagem nova largada na pasta do Drive do Hub: publica no mapa (o servidor faz no máximo 1 vez a cada 10 min)
+  if (S.ia && S.ia.github) setTimeout(() => { api('hubSincronizar', { leve: true }).catch(() => { }); }, 4000);
+}
 function thumbDrive(fileId, cls, label) {
   const el = h('div', { class: 'thumb ' + (cls || '') }, label ? h('span', { class: 'lbl' }, label) : null);
   // no xadrez (PNG transparente) a imagem vai num <img> por cima, para não brigar com o padrão do fundo
@@ -1016,7 +1023,7 @@ function seletorRegiao() {
 // menu lateral em 3 grupos (separados por uma linha)
 const NAV_GRUPOS = [
   [['inicio', 'Início'], ['festas', 'Festas'], ['temas', 'Temas'], ['mapas', 'Mapas']],
-  [['artes', 'Artes'], ['roteiros', 'Roteiros'], ['metricas', 'Métricas']],
+  [['artes', 'Artes'], ['roteiros', 'Roteiros'], ['metricas', 'Métricas'], ['hub', 'Hub do VRChat']],
   [['djs', 'DJs'], ['equipe', 'Equipe e ajustes'], ['lixeira', 'Lixeira'], ['historico', 'Histórico']]
 ];
 const NAV = [].concat(...NAV_GRUPOS);
@@ -2742,6 +2749,120 @@ function modoGravacao(f, rot, w) {
   doc.body.style.background = '#000';
   doc.body.replaceChildren(ov);
   w.focus();
+}
+
+// =====================================================================
+// Hub do VRChat: imagens da parede da entrada e do cantinho de foto
+// =====================================================================
+
+// recorta no centro na proporção do quadro e reduz para o tamanho dele, em JPEG
+async function imagemDoQuadro(arq, w, alt) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(arq); });
+  const iw = img.naturalWidth, ih = img.naturalHeight, alvo = w / alt;
+  let sw = iw, sh = ih;
+  if (iw / ih > alvo) sw = ih * alvo; else sh = iw / alvo;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = alt;
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, w, alt);
+  let q = 0.88, d = c.toDataURL('image/jpeg', q);
+  while (d.length > 1400000 && q > 0.5) { q -= 0.08; d = c.toDataURL('image/jpeg', q); }
+  return { dataUrl: d, base64: d.split(',')[1], pequena: iw < w * 0.6 || ih < alt * 0.6 };
+}
+
+VIEWS.hub = function () {
+  const box = h('div', { class: 'stack' });
+  const H = S.hub || null;
+  if (!S.hubVisto) {
+    S.hubVisto = true;
+    api(S.ia && S.ia.github ? 'hubSincronizar' : 'hubImagens', {}).then((r) => {
+      S.hub = r;
+      if (r.publicadas && r.publicadas.length) toast('Publicado no mapa (vindo do Drive): ' + r.publicadas.join(', '), 'ok');
+      if (S.rota.v === 'hub') renderSeguro();
+    }).catch((e) => toast(e.erro || 'Não consegui ler as imagens do Hub', 'err'));
+  }
+  const versao = (s) => (s.quando ? '?v=' + encodeURIComponent(s.quando) : '');
+  const cartao = (s) => {
+    const prev = h('div', { class: 'hub-prev', style: { aspectRatio: s.w + ' / ' + s.h, backgroundImage: `url("${(S.hubLocal || {})[s.k] || s.url + versao(s)}")` } });
+    return h('div', { class: 'card' },
+      h('h3', {}, s.nome),
+      h('div', { class: 'small muted', style: { marginBottom: '8px' } }, s.onde),
+      prev,
+      h('div', { class: 'small muted', style: { margin: '8px 0' } },
+        `Tamanho do quadro: ${s.w} × ${s.h} px (a imagem é cortada no centro para encher).`,
+        h('br'), s.quando ? `Última troca: ${new Date(s.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (${s.origem === 'drive' ? 'pela pasta do Drive' : nomePessoa(s.quem)})` : 'Ainda com a imagem que veio no mapa.'),
+      s.erro ? h('div', { class: 'small', style: { color: 'var(--danger)', marginBottom: '8px' } }, 'Drive: ' + s.erro) : null,
+      h('div', { class: 'row' },
+        btn('Trocar imagem', async () => {
+          if (!S.ia.github) { toast('Antes, salve a chave do GitHub (passos no fim da tela)', 'err'); return; }
+          const arq = await escolherImagem();
+          if (!arq) return;
+          const im = await imagemDoQuadro(arq, s.w, s.h);
+          if (im.pequena && !(await confirmar('Essa imagem é bem menor que o quadro e vai ficar borrada no mapa. Enviar mesmo assim?', 'Enviar'))) return;
+          toast('Publicando ' + s.nome + '…');
+          const r = await run('hubImagemEnviar', { slot: s.k, base64: im.base64 });
+          S.hub = r; S.hubLocal = Object.assign({}, S.hubLocal, { [s.k]: im.dataUrl });
+          toast('Publicado! Quem entrar no mapa daqui a uns minutos já vê a nova.', 'ok'); render();
+        }, 'primary', 'upload'),
+        h('a', { class: 'btn ghost', href: s.url + versao(s), target: '_blank' }, icon('ext'), 'Ver publicada')));
+  };
+  add(box, [
+    topo('Hub do VRChat'),
+    h('div', { class: 'hint' }, 'Estas são as imagens da entrada do mapa Many Hub (paredes, quadro da staff e fundo do cantinho de foto). ',
+      'Trocou aqui, o mapa pega sozinho, sem precisar subir o mapa de novo: quem entrar no mundo uns minutos depois já vê a imagem nova (quem já está lá dentro vê na próxima vez que entrar).'),
+    !H ? h('div', { class: 'loading' }, 'Carregando…') : h('div', { class: 'hub-grid' }, H.slots.map(cartao)),
+    h('div', { class: 'card' }, h('h3', {}, 'Pelo Google Drive'),
+      h('p', { class: 'small muted', style: { marginTop: 0 } }, 'Também dá para trocar largando a imagem na pasta do Drive do Many (funciona pelo Drive do computador também). Cada quadro tem a sua subpasta; a imagem mais nova de cada subpasta é a que vai para o mapa.'),
+      H ? h('ul', { class: 'small muted', style: { marginTop: 0, paddingLeft: '20px' } }, H.slots.map((s) => h('li', {}, 'Many Planner / ' + s.pasta))) : null,
+      h('p', { class: 'small muted' }, 'O app publica o que mudou no Drive quando alguém abre o Many Planner (no máximo a cada 10 min) ou na hora, pelo botão abaixo.'),
+      h('div', { class: 'row' },
+        H && H.pasta ? h('a', { class: 'btn', href: H.pasta, target: '_blank' }, icon('ext'), 'Abrir a pasta no Drive') : null,
+        btn('Publicar o que mudou no Drive agora', async () => {
+          const r = await run('hubSincronizar', {});
+          S.hub = r; S.hubLocal = {};
+          toast(r.publicadas && r.publicadas.length ? 'Publicado: ' + r.publicadas.join(', ') : 'Nada novo na pasta do Drive', 'ok'); render();
+        }, '', 'restaurar'))),
+    H ? cardRedesHub(H) : null,
+    cardChaveGithub()
+  ]);
+  return box;
+};
+
+// links dos botões da entrada do mapa (o da comunidade abre o grupo do VRChat direto e não precisa de link)
+function cardRedesHub(H) {
+  const r = H.redes || {};
+  const dc = inp({ value: r.discord || '', placeholder: 'discord.gg/convite-do-many' });
+  const ig = inp({ value: r.instagram || '', placeholder: 'instagram.com/perfil-do-many' });
+  return h('div', { class: 'card' }, h('h3', {}, 'Botões de redes da entrada'),
+    h('p', { class: 'small muted', style: { marginTop: 0 } }, 'Na entrada do mapa tem 3 botões: Comunidade do VRChat (abre o grupo do Many dentro do jogo), Discord e Instagram. ',
+      'O VRChat não deixa um mundo abrir sites, então os botões de Discord e Instagram mostram o link para copiar (Ctrl+C no PC) e o QR code. Deixe vazio para mostrar "em breve".'),
+    h('label', { class: 'small muted' }, 'Convite do Discord'), dc,
+    h('label', { class: 'small muted', style: { marginTop: '8px', display: 'block' } }, 'Perfil do Instagram'), ig,
+    h('div', { class: 'row', style: { marginTop: '10px' } },
+      btn('Publicar links', async () => {
+        if (!S.ia.github) { toast('Antes, salve a chave do GitHub (passos no fim da tela)', 'err'); return; }
+        S.hub = await run('hubRedesSalvar', { discord: dc.value, instagram: ig.value });
+        toast('Links publicados! Quem entrar no mapa daqui a uns minutos já vê.', 'ok'); render();
+      }, 'primary')));
+}
+
+function cardChaveGithub() {
+  const tem = S.ia && S.ia.github;
+  const chave = inp({ type: 'password', placeholder: tem ? 'chave salva (cole uma nova para trocar)' : 'cole aqui a chave (começa com github_pat_…)', autocomplete: 'off' });
+  const salvar = async (valor) => { const r = await run('salvarChaveGithub', { chave: valor }); S.ia.github = r.github; S.hub = r; render(); };
+  return h('div', { class: 'card' }, h('h3', {}, 'Chave do GitHub (publicar as imagens)'),
+    h('div', { class: 'row', style: { marginBottom: '10px' } }, tem ? h('span', { class: 'chip st-Realizada' }, 'configurada') : h('span', { class: 'chip st-Cancelada' }, 'não configurada')),
+    h('p', { class: 'small muted', style: { marginTop: 0 } }, 'O VRChat só baixa imagens de sites confiáveis (o Google Drive não é um deles). Por isso o app publica as imagens no GitHub do Many, no mesmo lugar onde fica esta página. Precisa fazer só uma vez:'),
+    h('ol', { class: 'small muted', style: { marginTop: 0, paddingLeft: '20px' } },
+      h('li', {}, 'Entre no ', h('a', { href: url('github.com/settings/personal-access-tokens/new'), target: '_blank' }, 'GitHub (criar chave)'), ' com a conta que publica o Many Planner.'),
+      h('li', {}, 'Token name: Many Planner Hub. Expiration: escolha "No expiration" (ou a maior data que aparecer).'),
+      h('li', {}, 'Repository access: "Only select repositories" e marque ', h('b', {}, 'many-planner'), '.'),
+      h('li', {}, 'Permissions → Repository permissions → ', h('b', {}, 'Contents: Read and write'), '.'),
+      h('li', {}, 'Clique em "Generate token", copie a chave (começa com github_pat_) e cole aqui.')),
+    h('div', { class: 'row' }, h('div', { class: 'grow' }, chave),
+      btn('Salvar chave', async () => { if (chave.value.trim()) { await salvar(chave.value.trim()); toast('Chave salva e testada', 'ok'); } }, 'primary'),
+      tem ? btn('Remover', async () => { if (await confirmar('Remover a chave do GitHub? As imagens do Hub param de ser publicadas.', 'Remover')) await salvar(''); }, 'ghost danger') : null));
 }
 
 function cardChaveFotos() {
