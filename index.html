@@ -747,6 +747,26 @@ function horaPT(data, hora) {
   const g = (t) => (p.find((x) => x.type === t) || {}).value;
   return { txt: `${g('hour')}:${g('minute')}`, outroDia: Number(g('day')) !== d };
 }
+// diferença Portugal - Brasil nessa data (3h no inverno de Portugal, 4h no verão)
+function difPT(data) { const p = horaPT(data, '12:00'); return p ? Number(p.txt.slice(0, 2)) - 12 : 3; }
+function somarHora(hr, n) { const [hh, mm] = hr.split(':').map(Number); return `${String(((hh + n) % 24 + 24) % 24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
+// campos de horário BR e Portugal ligados (mexer num atualiza o outro). padraoPT: festa nova começa 00h em Portugal
+function camposHorario(data, horaBR, padraoPT) {
+  const br = inp({ type: 'time', value: horaBR || '' });
+  const pt = inp({ type: 'time' });
+  let mexeu = !!horaBR;
+  const dif = () => difPT(data.value || S.hoje);
+  const aviso = h('span', { class: 'hint' });
+  const doBR = () => { pt.value = br.value ? somarHora(br.value, dif()) : ''; const p = horaPT(data.value, br.value); aviso.textContent = p && p.outroDia ? 'Em Portugal já é o dia seguinte.' : ''; };
+  if (!mexeu && padraoPT) br.value = somarHora(padraoPT, -dif());
+  doBR();
+  br.addEventListener('input', () => { mexeu = true; doBR(); });
+  pt.addEventListener('input', () => { mexeu = true; if (pt.value) br.value = somarHora(pt.value, -dif()); doBR(); });
+  data.addEventListener('input', () => { if (!mexeu && padraoPT) br.value = somarHora(padraoPT, -dif()); doBR(); });
+  const el = h('div', { class: 'f full' }, h('div', { class: 'grid cols2' },
+    h('label', { class: 'f' }, 'Início (horário de Brasília)', br), h('label', { class: 'f' }, 'Início (horário de Portugal)', pt)), aviso);
+  return { el, br };
+}
 function emDias(n) { return n === 0 ? 'hoje' : n === 1 ? 'amanhã' : `em ${n} dias`; }
 function hora(hr) { return hr ? hr.replace(':00', 'h').replace(':', 'h') : ''; }
 function parHorario(f) {
@@ -1290,17 +1310,14 @@ function formNovaFesta(pre) {
   pre = pre || {};
   const nome = inp({ value: pre.nome || '', placeholder: 'Ex.: Halloween Slasher' });
   const data = inp({ type: 'date', value: pre.data || '' });
-  const horaI = inp({ type: 'time', value: pre.horaBR || '22:00' });
-  const ptInfo = h('span', { class: 'hint' });
-  const atualizarPT = () => { const p = horaPT(data.value, horaI.value); ptInfo.textContent = p ? `Portugal: ${p.txt}${p.outroDia ? ' (dia seguinte)' : ''}` : ''; };
-  data.addEventListener('input', atualizarPT); horaI.addEventListener('input', atualizarPT); atualizarPT();
+  const horario = camposHorario(data, pre.horaBR || '', '00:00'), horaI = horario.br;
   const temas = lista('temas').slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const tema = sel([['', '— escolher depois —']].concat(temas.map((t) => [t.id, t.nome])), pre.temaId || '');
   const m = modal({
     titulo: 'Nova festa',
     corpo: h('div', { class: 'form' },
       campo('Nome da festa', nome, { full: true }),
-      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
+      campoDataFesta(data), horario.el,
       campo('Tema', tema, { full: true, hint: 'O checklist padrão é criado automaticamente com prazos a partir da data.' })),
     acoes: [btn('Cancelar', () => m.fechar(), 'ghost'), btn('Criar festa', async () => {
       if (!nome.value.trim() || !data.value) { toast('Preencha nome e data', 'err'); return; }
@@ -1374,10 +1391,7 @@ VIEWS.festa = function () {
 function festaGeral(f) {
   const nome = inp({ value: f.nome });
   const data = inp({ type: 'date', value: f.data });
-  const horaI = inp({ type: 'time', value: f.horaBR || '' });
-  const ptInfo = h('span', { class: 'hint' });
-  const atualizarPT = () => { const p = horaPT(data.value, horaI.value); ptInfo.textContent = p ? `Portugal: ${p.txt}${p.outroDia ? ' (dia seguinte)' : ''}` : ''; };
-  data.addEventListener('input', atualizarPT); horaI.addEventListener('input', atualizarPT); atualizarPT();
+  const horario = camposHorario(data, f.horaBR || '', ''), horaI = horario.br;
   const temas = lista('temas').slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const tema = sel([['', '— sem tema —']].concat(temas.map((t) => [t.id, t.nome])), f.temaId || '');
   const dress = inp({ value: f.dressCode || '', placeholder: 'Ex.: avatar de terror / preto e vermelho' });
@@ -1423,7 +1437,7 @@ function festaGeral(f) {
     h('summary', {}, icon('voltar'), h('b', {}, 'Detalhes'), resumo),
     h('div', { class: 'form' },
       campo('Nome da festa', nome, { full: true }),
-      campoDataFesta(data), h('label', { class: 'f' }, 'Início (horário de Brasília)', horaI, ptInfo),
+      campoDataFesta(data), horario.el,
       h('label', { class: 'f' }, 'Tema', tema, h('span', { class: 'hint' }, h('a', { href: '#', onclick: (e) => { e.preventDefault(); editarTema(null, (t) => { tema.appendChild(h('option', { value: t.id }, t.nome)); tema.value = t.id; }); } }, '+ criar tema novo'))),
       campo('Dress code', dress),
       campo('Notas internas', notas, { full: true })));
@@ -2811,6 +2825,7 @@ VIEWS.hub = function () {
     topo('Hub do VRChat'),
     h('div', { class: 'hint' }, 'Estas são as imagens da entrada do mapa Many Hub (paredes, quadro da staff e fundo do cantinho de foto). ',
       'Trocou aqui, o mapa pega sozinho, sem precisar subir o mapa de novo: quem entrar no mundo uns minutos depois já vê a imagem nova (quem já está lá dentro vê na próxima vez que entrar).'),
+    H ? cardFlyerHub(H) : null,
     !H ? h('div', { class: 'loading' }, 'Carregando…') : h('div', { class: 'hub-grid' }, H.slots.map(cartao)),
     h('div', { class: 'card' }, h('h3', {}, 'Pelo Google Drive'),
       h('p', { class: 'small muted', style: { marginTop: 0 } }, 'Também dá para trocar largando a imagem na pasta do Drive do Many (funciona pelo Drive do computador também). Cada quadro tem a sua subpasta; a imagem mais nova de cada subpasta é a que vai para o mapa.'),
@@ -2828,6 +2843,43 @@ VIEWS.hub = function () {
   ]);
   return box;
 };
+
+// flyer da próxima festa: a última versão aprovada da peça "Flyer do Hub" das artes, com um clique para ir pro ar
+function cardFlyerHub(H) {
+  const slot = H.slots.find((s) => s.k === 'flyer');
+  if (!slot) return null;
+  const prox = festasOrdenadas().filter((f) => f.data >= S.hoje && f.status !== 'Cancelada' && f.status !== 'Realizada');
+  const flyerDe = (f) => artesDa(f.id).filter((x) => x.peca === 'flyer' && x.status === 'Aprovada').sort((a, b) => b.versao - a.versao)[0];
+  const f = prox.find((x) => flyerDe(x)) || prox[0];
+  const titulo = h('h3', {}, 'Flyer da próxima festa');
+  if (!f) return h('div', { class: 'card' }, titulo, h('div', { class: 'small muted' }, 'Nenhuma festa marcada.'));
+  const fl = flyerDe(f);
+  const cab = h('div', { class: 'small muted', style: { marginBottom: '10px' } }, `${f.nome} · ${fmtData(f.data)}`);
+  if (!fl) {
+    return h('div', { class: 'card' }, titulo, cab, h('div', { class: 'small muted' }, 'Ainda sem flyer aprovado. Peça a peça "Flyer do Hub do VRChat" na aba Artes da festa e aprove; ele aparece aqui.'),
+      h('div', { class: 'row', style: { marginTop: '10px' } }, btn('Abrir as artes da festa', () => ir('festa', { id: f.id, aba: 'artes' }), 'sm')));
+  }
+  const noAr = slot.arteId === fl.id;
+  const th = thumbDrive(fl.fileId, '', null);
+  th.style.aspectRatio = '4 / 5'; th.style.backgroundSize = 'cover'; th.style.width = '220px'; th.style.flex = 'none';
+  const bOk = btn('Confirmar e colocar no ar', null, 'primary', 'check');
+  bOk.addEventListener('click', async () => {
+    if (!S.ia.github) { toast('Antes, salve a chave do GitHub (passos no fim da tela)', 'err'); return; }
+    bOk.disabled = true; bOk.lastChild.textContent = 'Publicando…';
+    try {
+      S.hub = await run('hubFlyerPublicar', { arteId: fl.id }); S.hubLocal = Object.assign({}, S.hubLocal); delete S.hubLocal.flyer;
+      toast('Flyer no ar! Quem entrar no mapa daqui a uns minutos já vê.', 'ok'); render();
+    } catch (e) { bOk.disabled = false; bOk.lastChild.textContent = 'Confirmar e colocar no ar'; }
+  });
+  return h('div', { class: 'card' }, titulo, cab,
+    h('div', { class: 'row', style: { gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' } },
+      h('a', { href: linkDrive(fl.fileId), target: '_blank' }, th),
+      h('div', { class: 'stack grow', style: { gap: '8px', minWidth: '200px' } },
+        h('div', { class: 'row' }, h('span', { class: 'chip st-Realizada' }, 'aprovado · v' + fl.versao),
+          noAr ? h('span', { class: 'chip on' }, icon('check'), ' no ar no mapa') : h('span', { class: 'chip' }, 'ainda não está no mapa')),
+        h('div', { class: 'small muted' }, noAr ? 'Esse é o flyer que está na parede da entrada do mapa agora.' : 'Vai para o quadro do meio da parede da entrada (o mesmo quadro "Flyer da festa" abaixo).'),
+        noAr ? null : h('div', { class: 'row' }, bOk))));
+}
 
 // links dos botões da entrada do mapa (o da comunidade abre o grupo do VRChat direto e não precisa de link)
 function cardRedesHub(H) {
@@ -3316,6 +3368,25 @@ function secaoGeradas(f, pedidos) {
         btn(`Mandar ${ajustes.length} ajuste(s) para a fila`, async () => {
           const r = await run('pedirAjustes', { festaId: f.id, versao: p.versao }); upsert('pedidosArte', r.salvo); toast('Ajustes na fila', 'ok'); render();
         }, 'primary', 'ia')));
+      // revisão geral: uma anotação que vale para todas as artes desta versão
+      if (p.status === 'Pronto') {
+        const nota = area('', { placeholder: 'Ex.: deixar todas mais escuras, trocar a fonte das infos, logo da festa maior em tudo', style: { minHeight: '60px' } });
+        const bRev = btn('Pedir revisão de tudo', null, 'primary', 'ia');
+        bRev.addEventListener('click', async () => {
+          if (!nota.value.trim()) { toast('Escreva o que revisar em todas as artes', 'err'); return; }
+          const nAj = doPedido.filter((x) => x.status === 'Ajuste').length;
+          if (!(await confirmar(`Refazer todas as ${new Set(doPedido.map((x) => x.peca)).size} peça(s) da versão ${p.versao} com essa anotação` + (nAj ? ` (os ${nAj} ajuste(s) marcados vão junto)` : '') + '?', 'Pedir revisão'))) return;
+          bRev.disabled = true; bRev.lastChild.textContent = 'Enviando para a fila…';
+          try {
+            const r = await run('pedirRevisaoGeral', { festaId: f.id, versao: p.versao, obs: nota.value.trim() });
+            upsert('pedidosArte', r.salvo); toast(`Revisão geral na fila (v${r.salvo.versao})`, 'ok'); render();
+          } catch (e) { bRev.disabled = false; bRev.lastChild.textContent = 'Pedir revisão de tudo'; }
+        });
+        corpo.appendChild(h('div', { class: 'card', style: { background: 'var(--surface2)', marginTop: '12px' } },
+          h('b', {}, 'Revisão geral'),
+          h('div', { class: 'hint', style: { margin: '4px 0 8px' } }, 'Uma anotação que vale para todas as artes desta versão. A IA refaz todas as peças com ela (e com os ajustes marcados em cada peça, se tiver).'),
+          nota, h('div', { class: 'row end', style: { marginTop: '8px' } }, bRev)));
+      }
     }
     const leg = p.legendas || {};
     if (leg.instagram || leg.discord) {
