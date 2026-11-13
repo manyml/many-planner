@@ -1,2 +1,2 @@
-discord=
-instagram=
+discord=https://discord.gg/SP55mVVV5j
+instagram=https://www.instagram.com/manyml.6219/
