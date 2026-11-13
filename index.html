@@ -2826,6 +2826,7 @@ VIEWS.hub = function () {
     h('div', { class: 'hint' }, 'Estas são as imagens da entrada do mapa Many Hub (paredes, quadro da staff e fundo do cantinho de foto). ',
       'Trocou aqui, o mapa pega sozinho, sem precisar subir o mapa de novo: quem entrar no mundo uns minutos depois já vê a imagem nova (quem já está lá dentro vê na próxima vez que entrar).'),
     H ? cardFlyerHub(H) : null,
+    H ? cardStaffHub(H) : null,
     !H ? h('div', { class: 'loading' }, 'Carregando…') : h('div', { class: 'hub-grid' }, H.slots.map(cartao)),
     h('div', { class: 'card' }, h('h3', {}, 'Pelo Google Drive'),
       h('p', { class: 'small muted', style: { marginTop: 0 } }, 'Também dá para trocar largando a imagem na pasta do Drive do Many (funciona pelo Drive do computador também). Cada quadro tem a sua subpasta; a imagem mais nova de cada subpasta é a que vai para o mapa.'),
@@ -2879,6 +2880,115 @@ function cardFlyerHub(H) {
           noAr ? h('span', { class: 'chip on' }, icon('check'), ' no ar no mapa') : h('span', { class: 'chip' }, 'ainda não está no mapa')),
         h('div', { class: 'small muted' }, noAr ? 'Esse é o flyer que está na parede da entrada do mapa agora.' : 'Vai para o quadro do meio da parede da entrada (o mesmo quadro "Flyer da festa" abaixo).'),
         noAr ? null : h('div', { class: 'row' }, bOk))));
+}
+
+// foto de staff: reduz no navegador (lado maior 1000 px, JPEG) para o envio ser rápido
+async function fotoReduzida(arq, lado) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(arq); });
+  const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, c.width, c.height);
+  const d = c.toDataURL('image/jpeg', 0.9);
+  return { dataUrl: d, base64: d.split(',')[1] };
+}
+
+function modalStaff(pessoa) {
+  const nome = inp({ value: pessoa ? pessoa.nome : '', placeholder: 'Nome que vai embaixo da foto', maxlength: 40 });
+  let foto = null;
+  const prev = pessoa ? thumbDrive(pessoa.fileId, '', null) : h('div', { class: 'thumb' }, h('span', { class: 'lbl' }, 'sem foto'));
+  Object.assign(prev.style, { width: '150px', aspectRatio: '3 / 4', flex: 'none', backgroundSize: 'cover', backgroundPosition: '50% 20%' });
+  const bFoto = btn(pessoa ? 'Trocar foto' : 'Escolher foto', async () => {
+    const arq = await escolherImagem();
+    if (!arq) return;
+    foto = await fotoReduzida(arq, 1000);
+    prev.style.backgroundImage = `url("${foto.dataUrl}")`;
+    const l = prev.querySelector('.lbl'); if (l) l.remove();
+  }, '', 'upload');
+  const bOk = btn(pessoa ? 'Salvar' : 'Adicionar', null, 'primary', 'check');
+  const m = modal({
+    titulo: pessoa ? 'Editar ' + pessoa.nome : 'Adicionar staff',
+    corpo: h('div', { class: 'row', style: { gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' } }, prev,
+      h('div', { class: 'stack grow', style: { gap: '8px', minWidth: '200px' } },
+        h('label', { class: 'small muted' }, 'Nome'), nome,
+        h('div', { class: 'row' }, bFoto),
+        h('div', { class: 'small muted' }, 'Foto em pé (retrato) fica melhor: o rosto vai para o alto do quadro.'))),
+    acoes: [h('button', { class: 'btn ghost', onclick: () => m.fechar() }, 'Cancelar'), bOk]
+  });
+  bOk.addEventListener('click', async () => {
+    if (!nome.value.trim()) { toast('Escreva o nome', 'err'); return; }
+    if (!pessoa && !foto) { toast('Escolha a foto', 'err'); return; }
+    bOk.disabled = true;
+    try {
+      S.hub = pessoa
+        ? await run('hubStaffEditar', Object.assign({ id: pessoa.id, nome: nome.value }, foto ? { base64: foto.base64, mime: 'image/jpeg' } : {}))
+        : await run('hubStaffAdicionar', { nome: nome.value, base64: foto.base64, mime: 'image/jpeg' });
+      m.fechar(); render();
+    } catch (e) { bOk.disabled = false; }
+  });
+}
+
+// arte da staff do mapa: a lista (nome + foto) vira um pedido para a fila de artes do Claude Code
+function cardStaffHub(H) {
+  const st = H.staff || { lista: [], pedido: null };
+  const l = st.lista, ped = st.pedido;
+  const editar = async (args) => { S.hub = await run('hubStaffEditar', args); render(); };
+  const pessoas = l.map((p, i) => {
+    const th = thumbDrive(p.fileId, '', null);
+    Object.assign(th.style, { width: '100%', aspectRatio: '3 / 4', backgroundSize: 'cover', backgroundPosition: '50% 20%' });
+    return h('div', { class: 'stack', style: { gap: '6px', width: '150px' } }, th,
+      h('div', { style: { fontWeight: 700, textAlign: 'center', wordBreak: 'break-word' } }, p.nome),
+      h('div', { class: 'row', style: { gap: '0', justifyContent: 'center', flexWrap: 'nowrap' } },
+        h('button', { class: 'btn ghost sm', title: 'Mover para a esquerda', disabled: i === 0, onclick: () => editar({ id: p.id, mover: -1 }) }, '◀'),
+        h('button', { class: 'btn ghost sm', title: 'Editar nome ou foto', onclick: () => modalStaff(p) }, icon('editar')),
+        h('button', { class: 'btn ghost sm', title: 'Tirar da arte', onclick: async () => { if (await confirmar('Tirar ' + p.nome + ' da arte da staff?', 'Tirar')) editar({ id: p.id, remover: true }); } }, icon('x')),
+        h('button', { class: 'btn ghost sm', title: 'Mover para a direita', disabled: i === l.length - 1, onclick: () => editar({ id: p.id, mover: 1 }) }, '▶')));
+  });
+  const obs = h('textarea', { class: 'in', rows: 2, placeholder: 'Observação para a arte (opcional). Ex.: deixar o fundo mais roxo' });
+  const bGerar = btn('Gerar arte', null, 'primary', 'artes');
+  bGerar.addEventListener('click', async () => {
+    if (!l.length) { toast('Adicione pelo menos uma pessoa', 'err'); return; }
+    if (ped && ped.status === 'Na fila' && !(await confirmar('Já tem um pedido da staff na fila. Pedir de novo com a lista atual?', 'Pedir de novo'))) return;
+    bGerar.disabled = true;
+    try { S.hub = await run('hubStaffPedir', { obs: obs.value }); toast('Pedido enviado para a fila de artes!', 'ok'); render(); }
+    catch (e) { bGerar.disabled = false; }
+  });
+  let situacao = null;
+  if (ped && ped.status === 'Na fila') {
+    situacao = h('div', { class: 'row', style: { gap: '8px' } }, h('span', { class: 'chip' }, icon('relogio'), ' na fila de artes'),
+      h('span', { class: 'small muted' }, `pedida por ${nomePessoa(ped.quem)} com ${(ped.nomes || []).length} pessoas. Quando ficar pronta aparece aqui.`));
+  } else if (ped && ped.fileId) {
+    const th = thumbDrive(ped.fileId, '', null);
+    Object.assign(th.style, { width: '320px', maxWidth: '100%', aspectRatio: '1690 / 1300', backgroundSize: 'cover', flex: 'none' });
+    const noAr = ped.status === 'No ar';
+    const bOk = btn('Confirmar e colocar no ar', null, 'primary', 'check');
+    bOk.addEventListener('click', async () => {
+      if (!S.ia.github) { toast('Antes, salve a chave do GitHub (passos no fim da tela)', 'err'); return; }
+      bOk.disabled = true; bOk.lastChild.textContent = 'Publicando…';
+      try {
+        S.hub = await run('hubStaffPublicar', {}); S.hubLocal = Object.assign({}, S.hubLocal); delete S.hubLocal.staff;
+        toast('Arte da staff no ar! Quem entrar no mapa daqui a uns minutos já vê.', 'ok'); render();
+      } catch (e) { bOk.disabled = false; bOk.lastChild.textContent = 'Confirmar e colocar no ar'; }
+    });
+    situacao = h('div', { class: 'row', style: { gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' } },
+      h('a', { href: linkDrive(ped.fileId), target: '_blank' }, th),
+      h('div', { class: 'stack grow', style: { gap: '8px', minWidth: '200px' } },
+        h('div', { class: 'row' }, noAr ? h('span', { class: 'chip on' }, icon('check'), ' no ar no mapa') : h('span', { class: 'chip st-Realizada' }, 'arte pronta')),
+        (ped.avisos || []).length ? h('div', { class: 'small', style: { color: 'var(--warn, #c90)' } }, ped.avisos.join(' · ')) : null,
+        h('div', { class: 'small muted' }, noAr ? 'Essa é a arte que está no quadro da staff do mapa agora.' : 'Confira a arte. Se estiver boa, coloque no ar; se não, mude a lista ou escreva uma observação e gere de novo.'),
+        noAr ? null : h('div', { class: 'row' }, bOk)));
+  }
+  return h('div', { class: 'card' }, h('h3', {}, 'Arte da staff'),
+    h('p', { class: 'small muted', style: { marginTop: 0 } }, 'Monte a lista de quem aparece no quadro da staff do mapa (nome e foto). Depois clique em "Gerar arte": o pedido vai para a fila de artes e a arte volta aqui para você conferir e colocar no ar. ',
+      'A arte tem "STAFFS MANY" em cima e uma tira vertical do mesmo tamanho para cada pessoa, de ponta a ponta, com o nome embaixo. A ordem aqui é a ordem na arte (até 10 pessoas fica bom).'),
+    l.length ? h('div', { class: 'row', style: { gap: '14px', flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: '12px' } }, pessoas)
+      : h('div', { class: 'small muted', style: { marginBottom: '12px' } }, 'Ninguém na lista ainda.'),
+    h('div', { class: 'row', style: { marginBottom: '10px' } }, btn('Adicionar staff', () => modalStaff(null), '', 'plus')),
+    l.length ? obs : null,
+    l.length ? h('div', { class: 'row', style: { margin: '10px 0' } }, bGerar) : null,
+    situacao);
 }
 
 // links dos botões da entrada do mapa (o da comunidade abre o grupo do VRChat direto e não precisa de link)
